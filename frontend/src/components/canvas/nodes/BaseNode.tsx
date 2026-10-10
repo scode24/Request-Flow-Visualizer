@@ -31,6 +31,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const { activeNodeHighlights, selectedNodeId, setSelectedNodeId } = useSystem();
   const isActive = !!activeNodeHighlights[id];
   const isSelected = selectedNodeId === id;
+  const isBypassed = status === 'bypassed';
 
   const getStatusColor = () => {
     switch (status) {
@@ -51,12 +52,16 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   return (
     <div
       onClick={() => setSelectedNodeId(id)}
-      className={`relative min-w-[210px] rounded-xl border bg-white dark:bg-slate-900 p-3.5 shadow-sm transition-all duration-200 cursor-pointer select-none hover:shadow-md ${
+      className={`relative min-w-[210px] rounded-xl border p-3.5 shadow-sm transition-all duration-200 cursor-pointer select-none hover:shadow-md ${
+        isBypassed
+          ? 'opacity-65 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50'
+          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+      } ${
         isActive
-          ? 'ring-2 ring-emerald-500 shadow-emerald-500/20 shadow-lg scale-[1.02]'
+          ? 'ring-2 ring-emerald-500 shadow-emerald-500/20 shadow-lg scale-[1.02] opacity-100 !border-solid'
           : isSelected
-          ? 'ring-2 ring-indigo-500 border-indigo-400'
-          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+          ? 'ring-2 ring-indigo-500 border-indigo-400 opacity-100'
+          : ''
       }`}
     >
       {/* Target Handle */}
@@ -97,9 +102,15 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
           </div>
         </div>
 
-        {/* Status Indicator */}
+        {/* Status Indicator & Badge */}
         <div className="flex items-center gap-1.5" title={`Status: ${status}`}>
-          <span className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
+          {isBypassed ? (
+            <span className="text-[9px] font-mono uppercase font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+              Bypassed
+            </span>
+          ) : (
+            <span className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
+          )}
         </div>
       </div>
 

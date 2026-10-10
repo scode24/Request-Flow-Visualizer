@@ -4,13 +4,13 @@ import { Position } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { useSystem } from '../../../context/SystemContext';
 
-export const BackendNode: React.FC<{ data: { instanceId: string; index: number; name?: string } }> = ({ data }) => {
+export const BackendNode: React.FC<{ data: { instanceId: string; index: number; name?: string; instance?: any; cpu?: number; connections?: number; status?: any } }> = ({ data }) => {
   const { loadBalancerMetrics } = useSystem();
-  const inst = loadBalancerMetrics?.instances.find((i) => i.id === data.instanceId);
+  const inst = data.instance || loadBalancerMetrics?.instances?.find((i) => i.id === data.instanceId);
 
-  const cpu = inst?.cpuPercent || 15;
-  const conns = inst?.activeConnections || 0;
-  const status = cpu > 85 ? 'degraded' : conns > 0 ? 'active' : 'healthy';
+  const cpu = data.cpu ?? (inst?.cpuPercent || 15);
+  const conns = data.connections ?? (inst?.activeConnections || 0);
+  const status = data.status || (cpu > 85 ? 'degraded' : conns > 0 ? 'active' : 'healthy');
 
   return (
     <BaseNode

@@ -3,6 +3,8 @@ import { config, SystemConfig } from '../config';
 import { loadBalancerService } from '../services/loadbalancer';
 import { autoscalerService } from '../services/autoscaler';
 import { cdnService } from '../services/cdn';
+import { cacheService } from '../services/cache';
+import { databaseService } from '../services/database';
 import { broadcastEvent } from '../websocket/wsServer';
 
 const router = Router();
@@ -103,14 +105,27 @@ router.post('/', (req: Request, res: Response) => {
       }
     }
 
-    // Broadcast configuration change to frontend so React Flow updates immediately
+    const updatedMetrics = {
+      loadBalancer: loadBalancerService.getMetrics(),
+      autoscaler: autoscalerService.getMetrics(),
+      cdn: cdnService.getMetrics(),
+      cache: cacheService.getMetrics(),
+      database: databaseService.getMetrics(),
+    };
+
+    // Broadcast configuration and metrics to frontend so React Flow updates immediately
     broadcastEvent('config_updated', {
       type: 'config_updated',
       config,
+      metrics: updatedMetrics,
       timestamp: Date.now(),
     });
 
-    res.json({ message: 'Configuration updated successfully', config });
+    res.json({
+      message: 'Configuration updated successfully',
+      config,
+      metrics: updatedMetrics,
+    });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to update config', message: err?.message });
   }

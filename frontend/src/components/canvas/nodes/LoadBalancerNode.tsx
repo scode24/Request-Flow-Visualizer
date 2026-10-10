@@ -4,9 +4,12 @@ import { Position } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { useSystem } from '../../../context/SystemContext';
 
-export const LoadBalancerNode: React.FC = () => {
-  const { loadBalancerMetrics } = useSystem();
-  const algo = loadBalancerMetrics?.algorithm === 'least-connections' ? 'Least Conn' : 'Round Robin';
+export const LoadBalancerNode: React.FC<{ data?: any }> = ({ data }) => {
+  const { loadBalancerMetrics, config } = useSystem();
+  const rawAlgo = data?.algorithm || config?.loadBalancer.algorithm || loadBalancerMetrics?.algorithm || 'round-robin';
+  const algo = rawAlgo === 'least-connections' ? 'Least Conn' : rawAlgo === 'random' ? 'Random' : 'Round Robin';
+  const replicasCount = data?.replicas || config?.loadBalancer.replicas || loadBalancerMetrics?.replicas || 1;
+  const activeConns = data?.activeConnections ?? (loadBalancerMetrics?.activeConnections || 0);
 
   return (
     <BaseNode
@@ -19,8 +22,8 @@ export const LoadBalancerNode: React.FC = () => {
       targetHandle={Position.Left}
       sourceHandle={Position.Right}
       metrics={[
-        { label: 'LB Replicas', value: `${loadBalancerMetrics?.replicas || 1} Pod(s)` },
-        { label: 'Active Conns', value: loadBalancerMetrics?.activeConnections || 0 },
+        { label: 'LB Replicas', value: `${replicasCount} Pod(s)` },
+        { label: 'Active Conns', value: activeConns },
       ]}
     />
   );

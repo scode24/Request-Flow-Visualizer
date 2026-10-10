@@ -4,11 +4,11 @@ import { Position } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { useSystem } from '../../../context/SystemContext';
 
-export const AutoscalerNode: React.FC = () => {
+export const AutoscalerNode: React.FC<{ data?: any }> = ({ data }) => {
   const { autoscalerMetrics, config } = useSystem();
-  const enabled = config?.backend.autoscalingEnabled ?? false;
-  const currentCpu = autoscalerMetrics?.currentCpuPercent || 15;
-  const targetCpu = config?.backend.targetCpuPercent || 65;
+  const enabled = data?.enabled !== undefined ? data.enabled : (config?.backend.autoscalingEnabled ?? false);
+  const currentCpu = data?.currentCpu ?? (autoscalerMetrics?.currentCpuPercent || 15);
+  const targetCpu = data?.targetCpu ?? (config?.backend.targetCpuPercent || 65);
 
   return (
     <BaseNode
@@ -21,8 +21,8 @@ export const AutoscalerNode: React.FC = () => {
       targetHandle={Position.Top}
       sourceHandle={Position.Bottom}
       metrics={[
-        { label: 'HPA Status', value: enabled ? 'Active' : 'Disabled' },
-        { label: 'CPU (Target)', value: `${currentCpu}% / ${targetCpu}%` },
+        { label: 'HPA Policy', value: enabled ? 'Active' : 'Disabled' },
+        { label: 'CPU / Target', value: enabled ? `${currentCpu}% / ${targetCpu}%` : 'Off' },
       ]}
     />
   );

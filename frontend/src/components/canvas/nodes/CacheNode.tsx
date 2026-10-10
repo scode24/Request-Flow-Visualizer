@@ -4,9 +4,12 @@ import { Position } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { useSystem } from '../../../context/SystemContext';
 
-export const CacheNode: React.FC = () => {
-  const { cacheMetrics } = useSystem();
-  const enabled = cacheMetrics?.enabled ?? true;
+export const CacheNode: React.FC<{ data?: any }> = ({ data }) => {
+  const { cacheMetrics, config } = useSystem();
+  const enabled = data?.enabled !== undefined ? data.enabled : (config?.redis.enabled ?? cacheMetrics?.enabled ?? true);
+  const hitRatio = data?.hitRatioPercent ?? (cacheMetrics?.hitRatioPercent || 0);
+  const totalHits = data?.totalHits ?? (cacheMetrics?.totalHits || 0);
+  const totalMisses = data?.totalMisses ?? (cacheMetrics?.totalMisses || 0);
 
   return (
     <BaseNode
@@ -19,8 +22,8 @@ export const CacheNode: React.FC = () => {
       targetHandle={Position.Left}
       sourceHandle={false}
       metrics={[
-        { label: 'Hit Ratio', value: `${cacheMetrics?.hitRatioPercent || 0}%` },
-        { label: 'Hits / Misses', value: `${cacheMetrics?.totalHits || 0} / ${cacheMetrics?.totalMisses || 0}` },
+        { label: 'Cache State', value: enabled ? 'Active' : 'Bypassed' },
+        { label: 'Hit Ratio', value: enabled ? `${hitRatio}%` : 'Disabled' },
       ]}
     />
   );

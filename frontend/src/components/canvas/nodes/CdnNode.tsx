@@ -4,9 +4,10 @@ import { Position } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { useSystem } from '../../../context/SystemContext';
 
-export const CdnNode: React.FC = () => {
+export const CdnNode: React.FC<{ data?: any }> = ({ data }) => {
   const { cdnMetrics, config } = useSystem();
-  const enabled = config?.cdn.enabled ?? true;
+  const enabled = data?.enabled !== undefined ? data.enabled : (config?.cdn.enabled ?? true);
+  const hitRatio = data?.hitRatioPercent ?? (cdnMetrics?.hitRatioPercent || 0);
 
   return (
     <BaseNode
@@ -19,8 +20,8 @@ export const CdnNode: React.FC = () => {
       targetHandle={Position.Left}
       sourceHandle={Position.Right}
       metrics={[
-        { label: 'Edge Status', value: enabled ? 'Enabled' : 'Bypassed' },
-        { label: 'Hit Ratio', value: enabled ? `${cdnMetrics?.hitRatioPercent || 0}%` : 'N/A' },
+        { label: 'Edge Status', value: enabled ? 'Active' : 'Bypassed' },
+        { label: 'Hit Ratio', value: enabled ? `${hitRatio}%` : 'Bypassed' },
       ]}
     />
   );

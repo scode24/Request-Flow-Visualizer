@@ -15,13 +15,13 @@ import {
 
 interface SystemContextType {
   wsConnected: boolean;
-  config: SystemConfig | null;
-  databaseMetrics: DatabaseMetrics | null;
-  cacheMetrics: CacheMetrics | null;
-  storageMetrics: StorageMetrics | null;
-  cdnMetrics: CdnMetrics | null;
-  loadBalancerMetrics: LoadBalancerMetrics | null;
-  autoscalerMetrics: AutoscalerMetrics | null;
+  config: SystemConfig;
+  databaseMetrics: DatabaseMetrics;
+  cacheMetrics: CacheMetrics;
+  storageMetrics: StorageMetrics;
+  cdnMetrics: CdnMetrics;
+  loadBalancerMetrics: LoadBalancerMetrics;
+  autoscalerMetrics: AutoscalerMetrics;
   loadTestStatus: LoadTestStatus | null;
   recentTraces: TraceSummary[];
   selectedTrace: TraceSummary | null;
@@ -37,17 +37,131 @@ interface SystemContextType {
   clearTraces: () => void;
 }
 
+const defaultInitialConfig: SystemConfig = {
+  port: 4000,
+  environment: 'development',
+  postgres: {
+    host: 'localhost',
+    port: 5432,
+    user: 'postgres',
+    password: 'postgres123',
+    database: 'flow_visualizer',
+    poolSize: 10,
+    queryTimeoutMs: 3000,
+  },
+  redis: {
+    host: 'localhost',
+    port: 6379,
+    ttlSeconds: 60,
+    enabled: true,
+  },
+  minio: {
+    endPoint: 'localhost',
+    port: 9000,
+    bucket: 'request-flow-bucket',
+  },
+  cdn: {
+    enabled: true,
+    ttlSeconds: 30,
+    simulatedLatencyMs: 10,
+  },
+  loadBalancer: {
+    algorithm: 'round-robin',
+    scalingMode: 'single',
+    replicas: 1,
+    connectionLimit: 1000,
+  },
+  backend: {
+    activeReplicas: 3,
+    minReplicas: 2,
+    maxReplicas: 8,
+    targetCpuPercent: 65,
+    artificialDelayMs: 0,
+    autoscalingEnabled: false,
+  },
+  infrastructureMode: 'standard',
+};
+
+const defaultInitialLbMetrics: LoadBalancerMetrics = {
+  algorithm: 'round-robin',
+  scalingMode: 'single',
+  replicas: 1,
+  totalRequestsRouted: 0,
+  activeConnections: 0,
+  cpuUtilizationPercent: 18,
+  instances: [
+    { id: 'backend-instance-1', name: 'Backend Pod #1', status: 'healthy', activeConnections: 0, totalRequests: 0, cpuPercent: 15, memoryPercent: 30, lastResponseTimeMs: 12, uptimeSeconds: 0 },
+    { id: 'backend-instance-2', name: 'Backend Pod #2', status: 'healthy', activeConnections: 0, totalRequests: 0, cpuPercent: 12, memoryPercent: 30, lastResponseTimeMs: 14, uptimeSeconds: 0 },
+    { id: 'backend-instance-3', name: 'Backend Pod #3', status: 'healthy', activeConnections: 0, totalRequests: 0, cpuPercent: 16, memoryPercent: 30, lastResponseTimeMs: 11, uptimeSeconds: 0 },
+  ],
+};
+
+const defaultInitialCdnMetrics: CdnMetrics = {
+  enabled: true,
+  totalRequests: 0,
+  hits: 0,
+  misses: 0,
+  bypassed: 0,
+  hitRatioPercent: 0,
+  cachedRoutesCount: 0,
+  bandwidthSavedKB: 0,
+  avgEdgeLatencyMs: 10,
+};
+
+const defaultInitialCacheMetrics: CacheMetrics = {
+  connected: false,
+  isRealRedis: false,
+  enabled: true,
+  totalHits: 0,
+  totalMisses: 0,
+  hitRatioPercent: 0,
+  keysCount: 0,
+  evictions: 0,
+  avgOpDurationMs: 1.2,
+};
+
+const defaultInitialDbMetrics: DatabaseMetrics = {
+  connected: false,
+  isRealPostgres: false,
+  totalQueries: 0,
+  activeConnections: 1,
+  idleConnections: 4,
+  waitingClients: 0,
+  avgQueryDurationMs: 8.5,
+  lastQueryDurationMs: 8.5,
+};
+
+const defaultInitialStorageMetrics: StorageMetrics = {
+  connected: false,
+  isRealMinio: false,
+  totalReads: 0,
+  totalWrites: 0,
+  bucketName: 'request-flow-bucket',
+  objectsCount: 3,
+  avgLatencyMs: 14,
+};
+
+const defaultInitialAutoscalerMetrics: AutoscalerMetrics = {
+  enabled: false,
+  minReplicas: 2,
+  maxReplicas: 8,
+  currentReplicas: 3,
+  targetCpuPercent: 65,
+  currentCpuPercent: 15,
+  recentEvents: [],
+};
+
 const SystemContext = createContext<SystemContextType | undefined>(undefined);
 
 export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [wsConnected, setWsConnected] = useState(false);
-  const [config, setConfig] = useState<SystemConfig | null>(null);
-  const [databaseMetrics, setDatabaseMetrics] = useState<DatabaseMetrics | null>(null);
-  const [cacheMetrics, setCacheMetrics] = useState<CacheMetrics | null>(null);
-  const [storageMetrics, setStorageMetrics] = useState<StorageMetrics | null>(null);
-  const [cdnMetrics, setCdnMetrics] = useState<CdnMetrics | null>(null);
-  const [loadBalancerMetrics, setLoadBalancerMetrics] = useState<LoadBalancerMetrics | null>(null);
-  const [autoscalerMetrics, setAutoscalerMetrics] = useState<AutoscalerMetrics | null>(null);
+  const [config, setConfig] = useState<SystemConfig>(defaultInitialConfig);
+  const [databaseMetrics, setDatabaseMetrics] = useState<DatabaseMetrics>(defaultInitialDbMetrics);
+  const [cacheMetrics, setCacheMetrics] = useState<CacheMetrics>(defaultInitialCacheMetrics);
+  const [storageMetrics, setStorageMetrics] = useState<StorageMetrics>(defaultInitialStorageMetrics);
+  const [cdnMetrics, setCdnMetrics] = useState<CdnMetrics>(defaultInitialCdnMetrics);
+  const [loadBalancerMetrics, setLoadBalancerMetrics] = useState<LoadBalancerMetrics>(defaultInitialLbMetrics);
+  const [autoscalerMetrics, setAutoscalerMetrics] = useState<AutoscalerMetrics>(defaultInitialAutoscalerMetrics);
   const [loadTestStatus, setLoadTestStatus] = useState<LoadTestStatus | null>(null);
   const [recentTraces, setRecentTraces] = useState<TraceSummary[]>([]);
   const [selectedTrace, setSelectedTrace] = useState<TraceSummary | null>(null);
@@ -93,13 +207,11 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Process trace span and map to architecture nodes and edges
   const handleTraceSpan = useCallback((span: TraceSpan) => {
-    // 1. Highlight specific component node
     triggerNodeHighlight(span.component);
     if (span.instanceId) {
       triggerNodeHighlight(span.instanceId);
     }
 
-    // 2. Highlight corresponding edge based on hop
     switch (span.component) {
       case 'client':
         triggerEdgeHighlight('e-client-cdn');
@@ -136,19 +248,19 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const cfgRes = await fetch('/api/config');
       if (cfgRes.ok) {
         const cfgData = await cfgRes.json();
-        setConfig(cfgData.config);
+        if (cfgData.config) setConfig(cfgData.config);
       }
 
       const summaryRes = await fetch('/api/metrics/summary');
       if (summaryRes.ok) {
         const s = await summaryRes.json();
-        setDatabaseMetrics(s.database);
-        setCacheMetrics(s.cache);
-        setStorageMetrics(s.storage);
-        setCdnMetrics(s.cdn);
-        setLoadBalancerMetrics(s.loadBalancer);
-        setAutoscalerMetrics(s.autoscaler);
-        setLoadTestStatus(s.loadTest);
+        if (s.database) setDatabaseMetrics(s.database);
+        if (s.cache) setCacheMetrics(s.cache);
+        if (s.storage) setStorageMetrics(s.storage);
+        if (s.cdn) setCdnMetrics(s.cdn);
+        if (s.loadBalancer) setLoadBalancerMetrics(s.loadBalancer);
+        if (s.autoscaler) setAutoscalerMetrics(s.autoscaler);
+        if (s.loadTest) setLoadTestStatus(s.loadTest);
       }
 
       const tracesRes = await fetch('/api/traces?limit=30');
@@ -215,21 +327,41 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
             case 'scaling_event': {
               if (msg.event) {
-                setAutoscalerMetrics((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        currentReplicas: msg.event.newReplicas,
-                        recentEvents: [msg.event, ...(prev.recentEvents || [])],
-                      }
-                    : null
-                );
+                setAutoscalerMetrics((prev) => ({
+                  ...prev,
+                  currentReplicas: msg.event.newReplicas,
+                  recentEvents: [msg.event, ...(prev.recentEvents || [])],
+                }));
+                // Also update load balancer instances to match new replica count
+                setLoadBalancerMetrics((prev) => {
+                  const newInstances = [];
+                  for (let i = 1; i <= msg.event.newReplicas; i++) {
+                    const existing = prev.instances.find((inst) => inst.id === `backend-instance-${i}`);
+                    newInstances.push(existing || {
+                      id: `backend-instance-${i}`,
+                      name: `Backend Pod #${i}`,
+                      status: 'healthy' as const,
+                      activeConnections: 0,
+                      totalRequests: 0,
+                      cpuPercent: 15,
+                      memoryPercent: 30,
+                      lastResponseTimeMs: 15,
+                      uptimeSeconds: 0,
+                    });
+                  }
+                  return { ...prev, instances: newInstances };
+                });
               }
               break;
             }
             case 'config_updated': {
-              if (msg.config) {
-                setConfig(msg.config);
+              if (msg.config) setConfig(msg.config);
+              if (msg.metrics) {
+                if (msg.metrics.loadBalancer) setLoadBalancerMetrics(msg.metrics.loadBalancer);
+                if (msg.metrics.autoscaler) setAutoscalerMetrics(msg.metrics.autoscaler);
+                if (msg.metrics.cdn) setCdnMetrics(msg.metrics.cdn);
+                if (msg.metrics.cache) setCacheMetrics(msg.metrics.cache);
+                if (msg.metrics.database) setDatabaseMetrics(msg.metrics.database);
               }
               break;
             }
@@ -280,14 +412,126 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateConfig = async (updates: any) => {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
+    // 1. Optimistic immediate state update for instantaneous UI feedback
+    let resolvedReplicas: number | undefined;
+
+    setConfig((prev) => {
+      const next: SystemConfig = {
+        ...prev,
+        cdn: { ...prev.cdn },
+        loadBalancer: { ...prev.loadBalancer },
+        backend: { ...prev.backend },
+        redis: { ...prev.redis },
+        postgres: { ...prev.postgres },
+        minio: { ...prev.minio },
+      };
+
+      if (updates.infrastructureMode) {
+        next.infrastructureMode = updates.infrastructureMode;
+        if (updates.infrastructureMode === 'single-backend') {
+          next.backend.activeReplicas = 1;
+          next.backend.autoscalingEnabled = false;
+          next.cdn.enabled = true;
+          resolvedReplicas = 1;
+        } else if (updates.infrastructureMode === 'hpa') {
+          next.backend.autoscalingEnabled = true;
+          next.backend.minReplicas = 2;
+          next.backend.maxReplicas = 8;
+          next.cdn.enabled = true;
+          resolvedReplicas = Math.max(2, next.backend.activeReplicas);
+          next.backend.activeReplicas = resolvedReplicas;
+        } else if (updates.infrastructureMode === 'cdn-bypass') {
+          next.cdn.enabled = false;
+        } else if (updates.infrastructureMode === 'single-db') {
+          // Single DB mode
+        } else if (updates.infrastructureMode === 'standard') {
+          next.backend.activeReplicas = 3;
+          next.backend.autoscalingEnabled = false;
+          next.cdn.enabled = true;
+          next.redis.enabled = true;
+          resolvedReplicas = 3;
+        }
+      }
+
+      if (updates.cdn) Object.assign(next.cdn, updates.cdn);
+      if (updates.loadBalancer) Object.assign(next.loadBalancer, updates.loadBalancer);
+      if (updates.backend) {
+        Object.assign(next.backend, updates.backend);
+        if (typeof updates.backend.activeReplicas === 'number') {
+          resolvedReplicas = updates.backend.activeReplicas;
+        }
+      }
+      if (updates.redis) Object.assign(next.redis, updates.redis);
+
+      return next;
     });
-    if (res.ok) {
-      const data = await res.json();
-      setConfig(data.config);
+
+    // Update loadBalancerMetrics instances immediately if replica count or mode changed
+    if (resolvedReplicas !== undefined || updates.loadBalancer?.algorithm || updates.loadBalancer?.replicas) {
+      setLoadBalancerMetrics((prev) => {
+        const targetCount = resolvedReplicas !== undefined ? resolvedReplicas : prev.instances.length;
+        const newInstances = [];
+        for (let i = 1; i <= targetCount; i++) {
+          const existing = prev.instances.find((inst) => inst.id === `backend-instance-${i}`);
+          newInstances.push(existing || {
+            id: `backend-instance-${i}`,
+            name: `Backend Pod #${i}`,
+            status: 'healthy' as const,
+            activeConnections: 0,
+            totalRequests: 0,
+            cpuPercent: 15,
+            memoryPercent: 30,
+            lastResponseTimeMs: 15,
+            uptimeSeconds: 0,
+          });
+        }
+        return {
+          ...prev,
+          algorithm: updates.loadBalancer?.algorithm || prev.algorithm,
+          replicas: updates.loadBalancer?.replicas || prev.replicas,
+          instances: newInstances,
+        };
+      });
+    }
+
+    // Update cdnMetrics immediately if CDN was toggled
+    if (updates.cdn?.enabled !== undefined || updates.infrastructureMode) {
+      const isEnabled = updates.cdn?.enabled !== undefined
+        ? updates.cdn.enabled
+        : updates.infrastructureMode === 'cdn-bypass'
+        ? false
+        : true;
+      setCdnMetrics((prev) => ({ ...prev, enabled: isEnabled }));
+    }
+
+    // Update autoscalerMetrics immediately if autoscaling was toggled
+    if (updates.backend?.autoscalingEnabled !== undefined || updates.infrastructureMode) {
+      const isHpa = updates.backend?.autoscalingEnabled !== undefined
+        ? updates.backend.autoscalingEnabled
+        : updates.infrastructureMode === 'hpa';
+      setAutoscalerMetrics((prev) => ({ ...prev, enabled: isHpa }));
+    }
+
+    // 2. Transmit to backend API and sync server-confirmed state
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config) setConfig(data.config);
+        if (data.metrics) {
+          if (data.metrics.loadBalancer) setLoadBalancerMetrics(data.metrics.loadBalancer);
+          if (data.metrics.autoscaler) setAutoscalerMetrics(data.metrics.autoscaler);
+          if (data.metrics.cdn) setCdnMetrics(data.metrics.cdn);
+          if (data.metrics.cache) setCacheMetrics(data.metrics.cache);
+          if (data.metrics.database) setDatabaseMetrics(data.metrics.database);
+        }
+      }
+    } catch (err) {
+      console.warn('Backend sync failed (optimistic update active):', err);
     }
   };
 

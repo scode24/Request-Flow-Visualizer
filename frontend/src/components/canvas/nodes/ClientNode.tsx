@@ -4,9 +4,11 @@ import { Position } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { useSystem } from '../../../context/SystemContext';
 
-export const ClientNode: React.FC = () => {
+export const ClientNode: React.FC<{ data?: any }> = ({ data }) => {
   const { loadTestStatus } = useSystem();
-  const isRunning = loadTestStatus?.isRunning;
+  const isRunning = data?.isRunning ?? loadTestStatus?.isRunning;
+  const activeWorkers = data?.activeWorkers ?? (loadTestStatus?.activeWorkers || 0);
+  const currentRps = data?.currentRps ?? (loadTestStatus?.currentRps || 0);
 
   return (
     <BaseNode
@@ -19,8 +21,8 @@ export const ClientNode: React.FC = () => {
       targetHandle={false}
       sourceHandle={Position.Right}
       metrics={[
-        { label: 'Active Users', value: isRunning ? `${loadTestStatus.activeWorkers} VU` : 'Idle' },
-        { label: 'Live RPS', value: `${loadTestStatus?.currentRps || 0} req/s` },
+        { label: 'Active Users', value: isRunning ? `${activeWorkers} VU` : 'Idle' },
+        { label: 'Live RPS', value: `${currentRps} req/s` },
       ]}
     />
   );

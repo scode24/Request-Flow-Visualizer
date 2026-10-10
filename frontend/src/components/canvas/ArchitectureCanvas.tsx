@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -22,7 +22,8 @@ import { AutoscalerNode } from './nodes/AutoscalerNode';
 import { AnimatedEdge } from './edges/AnimatedEdge';
 import { useSystem } from '../../context/SystemContext';
 import { useTheme } from '../../context/ThemeContext';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Sliders } from 'lucide-react';
+import { BackendInstance } from '../../types';
 
 const nodeTypes = {
   client: ClientNode,
@@ -41,52 +42,173 @@ const edgeTypes = {
 };
 
 export const ArchitectureCanvas: React.FC = () => {
-  const { config, loadBalancerMetrics } = useSystem();
+  const {
+    config,
+    loadBalancerMetrics,
+    cdnMetrics,
+    cacheMetrics,
+    databaseMetrics,
+    storageMetrics,
+    autoscalerMetrics,
+    loadTestStatus,
+  } = useSystem();
   const { theme } = useTheme();
 
-  const replicas = loadBalancerMetrics?.instances || [
-    { id: 'backend-instance-1', name: 'Backend Pod #1' },
-    { id: 'backend-instance-2', name: 'Backend Pod #2' },
-    { id: 'backend-instance-3', name: 'Backend Pod #3' },
-  ];
+  // Resolve active replica count
+  const replicaCount = config?.backend?.activeReplicas ?? (loadBalancerMetrics?.instances?.length || 3);
 
-  const cdnEnabled = config?.cdn.enabled ?? true;
+  // Generate replica instances list matching active replica count
+  const replicas: BackendInstance[] = useMemo(() => {
+    const list: BackendInstance[] = [];
+    for (let i = 1; i <= replicaCount; i++) {
+      const existing = loadBalancerMetrics?.instances?.find((inst) => inst.id === `backend-instance-${i}`);
+      list.push(
+        existing || {
+          id: `backend-instance-${i}`,
+          name: `Backend Pod #${i}`,
+          status: 'healthy',
+          activeConnections: 0,
+          totalRequests: 0,
+          cpuPercent: 15,
+          memoryPercent: 30,
+          lastResponseTimeMs: 15,
+          uptimeSeconds: 0,
+        }
+      );
+    }
+    return list;
+  }, [replicaCount, loadBalancerMetrics?.instances]);
 
-  // Build default layout
-  const buildInitialGraph = useMemo(() => {
+  const cdnEnabled = config?.cdn?.enabled ?? true;
+  const redisEnabled = config?.redis?.enabled ?? true;
+  const autoscalingEnabled = config?.backend?.autoscalingEnabled ?? false;
+  const lbAlgorithm = config?.loadBalancer?.algorithm ?? 'round-robin';
+  const lbReplicas = config?.loadBalancer?.replicas ?? 1;
+
+  // Build reactive graph representation
+  const graphData = useMemo(() => {
+    // 1. Build Nodes
     const nodes: Node[] = [
-      { id: 'client', type: 'client', position: { x: 50, y: 220 }, data: {} },
-      { id: 'cdn', type: 'cdn', position: { x: 300, y: 220 }, data: {} },
-      { id: 'gateway', type: 'gateway', position: { x: 550, y: 220 }, data: {} },
-      { id: 'loadbalancer', type: 'loadbalancer', position: { x: 800, y: 220 }, data: {} },
-      { id: 'autoscaler', type: 'autoscaler', position: { x: 1060, y: 30 }, data: {} },
+      {
+        id: 'client',
+        type: 'client',
+        position: { x: 50, y: 240 },
+        data: {
+          isRunning: loadTestStatus?.isRunning,
+          activeWorkers: loadTestStatus?.activeWorkers,
+          currentRps: loadTestStatus?.currentRps,
+        },
+      },
+      {
+        id: 'cdn',
+        type: 'cdn',
+        // In CDN bypass mode, shift CDN up slightly so direct bypass line is visually prominent
+        position: cdnEnabled ? { x: 290, y: 240 } : { x: 290, y: 110 },
+        data: {
+          enabled: cdnEnabled,
+          hitRatioPercent: cdnMetrics?.hitRatioPercent,
+        },
+      },
+      {
+        id: 'gateway',
+        type: 'gateway',
+        position: { x: 530, y: 240 },
+        data: {
+          rateLimit: 1000,
+        },
+      },
+      {
+        id: 'loadbalancer',
+        type: 'loadbalancer',
+        position: { x: 770, y: 240 },
+        data: {
+          algorithm: lbAlgorithm,
+          replicas: lbReplicas,
+          activeConnections: loadBalancerMetrics?.activeConnections,
+        },
+      },
     ];
 
-    // Position backend replicas vertically
-    const startY = Math.max(120, 240 - ((replicas.length - 1) * 85) / 2);
+    // Position backend replicas vertically centered around y = 240
+    const startY = replicaCount === 1 ? 240 : Math.max(80, 240 - ((replicaCount - 1) * 110) / 2);
     replicas.forEach((rep, idx) => {
       nodes.push({
         id: rep.id,
         type: 'backend',
-        position: { x: 1060, y: startY + idx * 105 },
-        data: { instanceId: rep.id, index: idx + 1, name: rep.name },
+        position: { x: 1040, y: startY + idx * 110 },
+        data: {
+          instanceId: rep.id,
+          index: idx + 1,
+          name: rep.name,
+          instance: rep,
+          cpu: rep.cpuPercent,
+          connections: rep.activeConnections,
+          status: rep.status,
+        },
       });
     });
 
-    // Infrastructure services on the right
-    nodes.push({ id: 'cache', type: 'cache', position: { x: 1340, y: 110 }, data: {} });
-    nodes.push({ id: 'database', type: 'database', position: { x: 1340, y: 240 }, data: {} });
-    nodes.push({ id: 'storage', type: 'storage', position: { x: 1340, y: 370 }, data: {} });
+    // Autoscaler node
+    nodes.push({
+      id: 'autoscaler',
+      type: 'autoscaler',
+      position: { x: 1040, y: Math.min(20, startY - 95) },
+      data: {
+        enabled: autoscalingEnabled,
+        targetCpu: config?.backend?.targetCpuPercent,
+        currentCpu: autoscalerMetrics?.currentCpuPercent,
+      },
+    });
 
-    // Build Edges
+    // Infrastructure storage tier nodes on the right
+    nodes.push({
+      id: 'cache',
+      type: 'cache',
+      position: { x: 1350, y: 110 },
+      data: {
+        enabled: redisEnabled,
+        hitRatioPercent: cacheMetrics?.hitRatioPercent,
+        totalHits: cacheMetrics?.totalHits,
+        totalMisses: cacheMetrics?.totalMisses,
+      },
+    });
+
+    nodes.push({
+      id: 'database',
+      type: 'database',
+      position: { x: 1350, y: 240 },
+      data: {
+        totalQueries: databaseMetrics?.totalQueries,
+        activeConnections: databaseMetrics?.activeConnections,
+      },
+    });
+
+    nodes.push({
+      id: 'storage',
+      type: 'storage',
+      position: { x: 1350, y: 370 },
+      data: {
+        totalReads: storageMetrics?.totalReads,
+        avgLatencyMs: storageMetrics?.avgLatencyMs,
+      },
+    });
+
+    // 2. Build Edges
     const edges: Edge[] = [];
 
     if (cdnEnabled) {
       edges.push({ id: 'e-client-cdn', source: 'client', target: 'cdn', type: 'animated' });
       edges.push({ id: 'e-cdn-gateway', source: 'cdn', target: 'gateway', type: 'animated' });
     } else {
-      // CDN Bypassed - direct client to gateway
-      edges.push({ id: 'e-client-gateway', source: 'client', target: 'gateway', type: 'animated' });
+      // Direct CDN Bypass route from Client to API Gateway
+      edges.push({
+        id: 'e-client-gateway',
+        source: 'client',
+        target: 'gateway',
+        type: 'animated',
+        label: 'Direct Bypass',
+        labelStyle: { fill: '#10b981', fontWeight: 600, fontSize: 10 },
+      });
     }
 
     edges.push({ id: 'e-gateway-lb', source: 'gateway', target: 'loadbalancer', type: 'animated' });
@@ -99,14 +221,17 @@ export const ArchitectureCanvas: React.FC = () => {
         target: rep.id,
         type: 'animated',
       });
-      // Backend Replicas to Cache, DB, and MinIO
-      edges.push({ id: `e-${rep.id}-cache`, source: rep.id, target: 'cache', type: 'animated' });
+
+      // Backend Replicas to Storage Tier
+      if (redisEnabled) {
+        edges.push({ id: `e-${rep.id}-cache`, source: rep.id, target: 'cache', type: 'animated' });
+      }
       edges.push({ id: `e-${rep.id}-database`, source: rep.id, target: 'database', type: 'animated' });
       edges.push({ id: `e-${rep.id}-storage`, source: rep.id, target: 'storage', type: 'animated' });
     });
 
-    // Autoscaler connected to backend
-    if (replicas.length > 0) {
+    // Autoscaler control connection
+    if (autoscalingEnabled && replicas.length > 0) {
       edges.push({
         id: 'e-autoscaler-backend',
         source: 'autoscaler',
@@ -117,20 +242,51 @@ export const ArchitectureCanvas: React.FC = () => {
     }
 
     return { nodes, edges };
-  }, [replicas, cdnEnabled]);
+  }, [
+    replicaCount,
+    replicas,
+    cdnEnabled,
+    redisEnabled,
+    autoscalingEnabled,
+    lbAlgorithm,
+    lbReplicas,
+    loadTestStatus?.isRunning,
+    loadTestStatus?.activeWorkers,
+    loadTestStatus?.currentRps,
+    cdnMetrics?.hitRatioPercent,
+    loadBalancerMetrics?.activeConnections,
+    config?.backend?.targetCpuPercent,
+    autoscalerMetrics?.currentCpuPercent,
+    cacheMetrics?.hitRatioPercent,
+    cacheMetrics?.totalHits,
+    cacheMetrics?.totalMisses,
+    databaseMetrics?.totalQueries,
+    databaseMetrics?.activeConnections,
+    storageMetrics?.totalReads,
+    storageMetrics?.avgLatencyMs,
+  ]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(buildInitialGraph.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(buildInitialGraph.edges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(graphData.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(graphData.edges);
 
-  // Sync nodes & edges when replicas or CDN status change
+  // Sync nodes & edges whenever graphData updates while preserving dragged node positions
   useEffect(() => {
-    setNodes(buildInitialGraph.nodes);
-    setEdges(buildInitialGraph.edges);
-  }, [buildInitialGraph, setNodes, setEdges]);
+    setNodes((currentNodes) => {
+      const posMap = new Map(currentNodes.map((n) => [n.id, n.position]));
+      return graphData.nodes.map((newNode) => {
+        const savedPos = posMap.get(newNode.id);
+        return {
+          ...newNode,
+          position: savedPos || newNode.position,
+        };
+      });
+    });
+    setEdges(graphData.edges);
+  }, [graphData, setNodes, setEdges]);
 
   const handleResetLayout = () => {
-    setNodes(buildInitialGraph.nodes);
-    setEdges(buildInitialGraph.edges);
+    setNodes(graphData.nodes);
+    setEdges(graphData.edges);
   };
 
   return (
@@ -165,9 +321,21 @@ export const ArchitectureCanvas: React.FC = () => {
         />
       </ReactFlow>
 
-      {/* Floating Toolbar */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm text-xs">
-        <span className="font-semibold text-slate-700 dark:text-slate-300">Architecture Canvas</span>
+      {/* Floating Status & Toolbar */}
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm text-xs">
+        <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
+          <Sliders className="w-3.5 h-3.5 text-emerald-500" />
+          <span>Topology:</span>
+          <span className="font-mono text-emerald-600 dark:text-emerald-400 uppercase font-bold text-[11px]">
+            {config?.infrastructureMode || 'STANDARD'}
+          </span>
+        </div>
+        <span className="text-slate-300 dark:text-slate-700">|</span>
+        <span className="text-slate-500 font-mono text-[11px]">
+          {replicaCount} Pod{replicaCount > 1 ? 's' : ''}
+          {cdnEnabled ? ' • CDN On' : ' • CDN Bypassed'}
+          {autoscalingEnabled ? ' • HPA On' : ''}
+        </span>
         <span className="text-slate-300 dark:text-slate-700">|</span>
         <button
           onClick={handleResetLayout}
