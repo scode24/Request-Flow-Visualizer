@@ -6,10 +6,10 @@ import { useSystem } from '../../../context/SystemContext';
 
 export const LoadBalancerNode: React.FC<{ data?: any }> = ({ data }) => {
   const { loadBalancerMetrics, config } = useSystem();
-  const rawAlgo = data?.algorithm || config?.loadBalancer.algorithm || loadBalancerMetrics?.algorithm || 'round-robin';
+  const rawAlgo = config?.loadBalancer?.algorithm || data?.algorithm || loadBalancerMetrics?.algorithm || 'round-robin';
   const algo = rawAlgo === 'least-connections' ? 'Least Conn' : rawAlgo === 'random' ? 'Random' : 'Round Robin';
-  const replicasCount = data?.replicas || config?.loadBalancer.replicas || loadBalancerMetrics?.replicas || 1;
-  const activeConns = data?.activeConnections ?? (loadBalancerMetrics?.activeConnections || 0);
+  const replicasCount = config?.loadBalancer?.replicas || data?.replicas || loadBalancerMetrics?.replicas || 1;
+  const activeConns = loadBalancerMetrics?.activeConnections ?? (data?.activeConnections || 0);
 
   return (
     <BaseNode

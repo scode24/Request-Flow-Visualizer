@@ -23,7 +23,6 @@ import { AnimatedEdge } from './edges/AnimatedEdge';
 import { useSystem } from '../../context/SystemContext';
 import { useTheme } from '../../context/ThemeContext';
 import { RotateCcw, Sliders } from 'lucide-react';
-import { BackendInstance } from '../../types';
 
 const nodeTypes = {
   client: ClientNode,
@@ -45,47 +44,27 @@ export const ArchitectureCanvas: React.FC = () => {
   const {
     config,
     loadBalancerMetrics,
-    cdnMetrics,
-    cacheMetrics,
-    databaseMetrics,
-    storageMetrics,
-    autoscalerMetrics,
-    loadTestStatus,
   } = useSystem();
   const { theme } = useTheme();
 
   // Resolve active replica count
   const replicaCount = config?.backend?.activeReplicas ?? (loadBalancerMetrics?.instances?.length || 3);
-
-  // Generate replica instances list matching active replica count
-  const replicas: BackendInstance[] = useMemo(() => {
-    const list: BackendInstance[] = [];
-    for (let i = 1; i <= replicaCount; i++) {
-      const existing = loadBalancerMetrics?.instances?.find((inst) => inst.id === `backend-instance-${i}`);
-      list.push(
-        existing || {
-          id: `backend-instance-${i}`,
-          name: `Backend Pod #${i}`,
-          status: 'healthy',
-          activeConnections: 0,
-          totalRequests: 0,
-          cpuPercent: 15,
-          memoryPercent: 30,
-          lastResponseTimeMs: 15,
-          uptimeSeconds: 0,
-        }
-      );
-    }
-    return list;
-  }, [replicaCount, loadBalancerMetrics?.instances]);
-
   const cdnEnabled = config?.cdn?.enabled ?? true;
   const redisEnabled = config?.redis?.enabled ?? true;
   const autoscalingEnabled = config?.backend?.autoscalingEnabled ?? false;
   const lbAlgorithm = config?.loadBalancer?.algorithm ?? 'round-robin';
   const lbReplicas = config?.loadBalancer?.replicas ?? 1;
 
-  // Build reactive graph representation
+  // Stable replica instances metadata list based only on replicaCount
+  const replicaList = useMemo(() => {
+    return Array.from({ length: replicaCount }, (_, i) => ({
+      id: `backend-instance-${i + 1}`,
+      name: `Backend Pod #${i + 1}`,
+      index: i + 1,
+    }));
+  }, [replicaCount]);
+
+  // Build reactive graph representation - ONLY recomputed when structural topology changes
   const graphData = useMemo(() => {
     // 1. Build Nodes
     const nodes: Node[] = [
@@ -93,11 +72,7 @@ export const ArchitectureCanvas: React.FC = () => {
         id: 'client',
         type: 'client',
         position: { x: 50, y: 240 },
-        data: {
-          isRunning: loadTestStatus?.isRunning,
-          activeWorkers: loadTestStatus?.activeWorkers,
-          currentRps: loadTestStatus?.currentRps,
-        },
+        data: {},
       },
       {
         id: 'cdn',
@@ -106,7 +81,6 @@ export const ArchitectureCanvas: React.FC = () => {
         position: cdnEnabled ? { x: 290, y: 240 } : { x: 290, y: 110 },
         data: {
           enabled: cdnEnabled,
-          hitRatioPercent: cdnMetrics?.hitRatioPercent,
         },
       },
       {
@@ -124,26 +98,21 @@ export const ArchitectureCanvas: React.FC = () => {
         data: {
           algorithm: lbAlgorithm,
           replicas: lbReplicas,
-          activeConnections: loadBalancerMetrics?.activeConnections,
         },
       },
     ];
 
     // Position backend replicas vertically centered around y = 240
     const startY = replicaCount === 1 ? 240 : Math.max(80, 240 - ((replicaCount - 1) * 110) / 2);
-    replicas.forEach((rep, idx) => {
+    replicaList.forEach((rep, idx) => {
       nodes.push({
         id: rep.id,
         type: 'backend',
         position: { x: 1040, y: startY + idx * 110 },
         data: {
           instanceId: rep.id,
-          index: idx + 1,
+          index: rep.index,
           name: rep.name,
-          instance: rep,
-          cpu: rep.cpuPercent,
-          connections: rep.activeConnections,
-          status: rep.status,
         },
       });
     });
@@ -155,8 +124,6 @@ export const ArchitectureCanvas: React.FC = () => {
       position: { x: 1040, y: Math.min(20, startY - 95) },
       data: {
         enabled: autoscalingEnabled,
-        targetCpu: config?.backend?.targetCpuPercent,
-        currentCpu: autoscalerMetrics?.currentCpuPercent,
       },
     });
 
@@ -167,9 +134,6 @@ export const ArchitectureCanvas: React.FC = () => {
       position: { x: 1350, y: 110 },
       data: {
         enabled: redisEnabled,
-        hitRatioPercent: cacheMetrics?.hitRatioPercent,
-        totalHits: cacheMetrics?.totalHits,
-        totalMisses: cacheMetrics?.totalMisses,
       },
     });
 
@@ -177,20 +141,14 @@ export const ArchitectureCanvas: React.FC = () => {
       id: 'database',
       type: 'database',
       position: { x: 1350, y: 240 },
-      data: {
-        totalQueries: databaseMetrics?.totalQueries,
-        activeConnections: databaseMetrics?.activeConnections,
-      },
+      data: {},
     });
 
     nodes.push({
       id: 'storage',
       type: 'storage',
       position: { x: 1350, y: 370 },
-      data: {
-        totalReads: storageMetrics?.totalReads,
-        avgLatencyMs: storageMetrics?.avgLatencyMs,
-      },
+      data: {},
     });
 
     // 2. Build Edges
@@ -214,7 +172,7 @@ export const ArchitectureCanvas: React.FC = () => {
     edges.push({ id: 'e-gateway-lb', source: 'gateway', target: 'loadbalancer', type: 'animated' });
 
     // Load Balancer to Backend Replicas
-    replicas.forEach((rep) => {
+    replicaList.forEach((rep) => {
       edges.push({
         id: `e-lb-${rep.id}`,
         source: 'loadbalancer',
@@ -231,11 +189,11 @@ export const ArchitectureCanvas: React.FC = () => {
     });
 
     // Autoscaler control connection
-    if (autoscalingEnabled && replicas.length > 0) {
+    if (autoscalingEnabled && replicaList.length > 0) {
       edges.push({
         id: 'e-autoscaler-backend',
         source: 'autoscaler',
-        target: replicas[0].id,
+        target: replicaList[0].id,
         type: 'animated',
         style: { strokeDasharray: '4 4' },
       });
@@ -244,40 +202,39 @@ export const ArchitectureCanvas: React.FC = () => {
     return { nodes, edges };
   }, [
     replicaCount,
-    replicas,
+    replicaList,
     cdnEnabled,
     redisEnabled,
     autoscalingEnabled,
     lbAlgorithm,
     lbReplicas,
-    loadTestStatus?.isRunning,
-    loadTestStatus?.activeWorkers,
-    loadTestStatus?.currentRps,
-    cdnMetrics?.hitRatioPercent,
-    loadBalancerMetrics?.activeConnections,
-    config?.backend?.targetCpuPercent,
-    autoscalerMetrics?.currentCpuPercent,
-    cacheMetrics?.hitRatioPercent,
-    cacheMetrics?.totalHits,
-    cacheMetrics?.totalMisses,
-    databaseMetrics?.totalQueries,
-    databaseMetrics?.activeConnections,
-    storageMetrics?.totalReads,
-    storageMetrics?.avgLatencyMs,
   ]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graphData.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graphData.edges);
 
-  // Sync nodes & edges whenever graphData updates while preserving dragged node positions
+  // Sync nodes & edges whenever structural topology updates while preserving measured dimensions & positions
   useEffect(() => {
     setNodes((currentNodes) => {
-      const posMap = new Map(currentNodes.map((n) => [n.id, n.position]));
+      const existingMap = new Map(currentNodes.map((n) => [n.id, n]));
       return graphData.nodes.map((newNode) => {
-        const savedPos = posMap.get(newNode.id);
+        const existing = existingMap.get(newNode.id);
+        if (!existing) {
+          return newNode;
+        }
         return {
+          ...existing,
           ...newNode,
-          position: savedPos || newNode.position,
+          // Preserve measured dimensions and internal flags so React Flow never unmounts or hides nodes
+          measured: existing.measured,
+          width: existing.width,
+          height: existing.height,
+          selected: existing.selected,
+          position: existing.position || newNode.position,
+          data: {
+            ...existing.data,
+            ...newNode.data,
+          },
         };
       });
     });
@@ -285,7 +242,18 @@ export const ArchitectureCanvas: React.FC = () => {
   }, [graphData, setNodes, setEdges]);
 
   const handleResetLayout = () => {
-    setNodes(graphData.nodes);
+    setNodes((currentNodes) => {
+      const existingMap = new Map(currentNodes.map((n) => [n.id, n]));
+      return graphData.nodes.map((newNode) => {
+        const existing = existingMap.get(newNode.id);
+        return {
+          ...newNode,
+          measured: existing?.measured,
+          width: existing?.width,
+          height: existing?.height,
+        };
+      });
+    });
     setEdges(graphData.edges);
   };
 
@@ -299,9 +267,11 @@ export const ArchitectureCanvas: React.FC = () => {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
+        fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
         minZoom={0.3}
         maxZoom={1.6}
         defaultViewport={{ x: 0, y: 0, zoom: 0.85 }}
+        onlyRenderVisibleElements={false}
         proOptions={{ hideAttribution: true }}
       >
         <Background

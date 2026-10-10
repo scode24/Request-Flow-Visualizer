@@ -6,9 +6,9 @@ import { useSystem } from '../../../context/SystemContext';
 
 export const ClientNode: React.FC<{ data?: any }> = ({ data }) => {
   const { loadTestStatus } = useSystem();
-  const isRunning = data?.isRunning ?? loadTestStatus?.isRunning;
-  const activeWorkers = data?.activeWorkers ?? (loadTestStatus?.activeWorkers || 0);
-  const currentRps = data?.currentRps ?? (loadTestStatus?.currentRps || 0);
+  const isRunning = loadTestStatus?.isRunning ?? (data?.isRunning || false);
+  const activeWorkers = loadTestStatus?.activeWorkers ?? (data?.activeWorkers || 0);
+  const currentRps = loadTestStatus?.currentRps ?? (data?.currentRps || 0);
 
   return (
     <BaseNode

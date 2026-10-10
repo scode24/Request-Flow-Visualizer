@@ -6,8 +6,8 @@ import { useSystem } from '../../../context/SystemContext';
 
 export const CdnNode: React.FC<{ data?: any }> = ({ data }) => {
   const { cdnMetrics, config } = useSystem();
-  const enabled = data?.enabled !== undefined ? data.enabled : (config?.cdn.enabled ?? true);
-  const hitRatio = data?.hitRatioPercent ?? (cdnMetrics?.hitRatioPercent || 0);
+  const enabled = config?.cdn?.enabled ?? (data?.enabled !== undefined ? data.enabled : true);
+  const hitRatio = cdnMetrics?.hitRatioPercent ?? (data?.hitRatioPercent || 0);
 
   return (
     <BaseNode

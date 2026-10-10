@@ -6,9 +6,9 @@ import { useSystem } from '../../../context/SystemContext';
 
 export const AutoscalerNode: React.FC<{ data?: any }> = ({ data }) => {
   const { autoscalerMetrics, config } = useSystem();
-  const enabled = data?.enabled !== undefined ? data.enabled : (config?.backend.autoscalingEnabled ?? false);
-  const currentCpu = data?.currentCpu ?? (autoscalerMetrics?.currentCpuPercent || 15);
-  const targetCpu = data?.targetCpu ?? (config?.backend.targetCpuPercent || 65);
+  const enabled = config?.backend?.autoscalingEnabled ?? (data?.enabled !== undefined ? data.enabled : false);
+  const currentCpu = autoscalerMetrics?.currentCpuPercent ?? (data?.currentCpu || 15);
+  const targetCpu = config?.backend?.targetCpuPercent ?? (data?.targetCpu || 65);
 
   return (
     <BaseNode

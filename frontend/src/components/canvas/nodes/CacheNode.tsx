@@ -6,10 +6,8 @@ import { useSystem } from '../../../context/SystemContext';
 
 export const CacheNode: React.FC<{ data?: any }> = ({ data }) => {
   const { cacheMetrics, config } = useSystem();
-  const enabled = data?.enabled !== undefined ? data.enabled : (config?.redis.enabled ?? cacheMetrics?.enabled ?? true);
-  const hitRatio = data?.hitRatioPercent ?? (cacheMetrics?.hitRatioPercent || 0);
-  const totalHits = data?.totalHits ?? (cacheMetrics?.totalHits || 0);
-  const totalMisses = data?.totalMisses ?? (cacheMetrics?.totalMisses || 0);
+  const enabled = config?.redis?.enabled ?? cacheMetrics?.enabled ?? (data?.enabled !== undefined ? data.enabled : true);
+  const hitRatio = cacheMetrics?.hitRatioPercent ?? (data?.hitRatioPercent || 0);
 
   return (
     <BaseNode
