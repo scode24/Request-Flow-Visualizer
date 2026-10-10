@@ -1,0 +1,124 @@
+version: '3.8'
+
+networks:
+  public-net:
+    driver: bridge
+  internal-net:
+    internal: true
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: flow_caddy_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - public-net
+    depends_on:
+      - frontend
+      - backend
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: flow_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flow_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeThisInProductionSecret123!}
+      POSTGRES_DB: flow_visualizer
+    volumes:
+      - pg-data-prod:/var/lib/postgresql/data
+      - ./backend/src/seed/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - internal-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  redis:
+    image: redis:7-alpine
+    container_name: flow_redis_prod
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-RedisSecureProdAuthKey456!}
+    volumes:
+      - redis-data-prod:/data
+    networks:
+      - internal-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    container_name: flow_minio_prod
+    restart: always
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio_admin_vps}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-MinioStrongProdKey789!}
+    volumes:
+      - minio-data-prod:/data
+    networks:
+      - internal-net
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: flow_backend_prod
+    restart: always
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-flow_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeThisInProductionSecret123!}
+      POSTGRES_DB: flow_visualizer
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-RedisSecureProdAuthKey456!}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minio_admin_vps}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-MinioStrongProdKey789!}
+      MINIO_BUCKET: request-flow-bucket
+      BACKEND_REPLICAS: 4
+    networks:
+      - internal-net
+      - public-net
+    depends_on:
+      - postgres
+      - redis
+      - minio
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: flow_frontend_prod
+    restart: always
+    networks:
+      - public-net
+    depends_on:
+      - backend
+
+volumes:
+  pg-data-prod:
+  redis-data-prod:
+  minio-data-prod:
+  caddy-data:
+  caddy-config:
