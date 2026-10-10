@@ -14,6 +14,25 @@ The platform visually demonstrates how a modern cloud-native system processes AP
 
 ---
 
+## 📸 Platform Screenshots
+
+### 1. Interactive Architecture Flow Canvas (Light Mode)
+*Interactive React Flow topology canvas with live icon-first infrastructure nodes, dynamic particle packet streams, and collapsible observability drawer.*
+
+![Interactive Architecture Flow Canvas (Light Mode)](docs/screenshots/topology-canvas-light.jpg)
+
+### 2. Live Concurrent Load Testing & Metrics (Dark Mode)
+*Real-time distributed request flow under concurrent multi-user load testing, featuring per-pod CPU telemetry, dynamic traffic routing, and p50/p95/p99 latency percentiles.*
+
+![Real-time Load Testing and Metrics (Dark Mode)](docs/screenshots/traffic-dashboard-dark.jpg)
+
+### 3. Component Testing Lab & API Testing Console
+*Dedicated isolation testing suites for Redis Cache, PostgreSQL, MinIO S3, and Load Balancers alongside an interactive HTTP request console and trace inspection console.*
+
+![Component Testing Lab & API Console](docs/screenshots/component-testing-console.jpg)
+
+---
+
 ## 🌟 Key Features
 
 - **Interactive Architecture Canvas**: Draggable, zoomable React Flow (`@xyflow/react`) canvas with icon-first infrastructure nodes for **Client**, **CDN Edge Network**, **API Gateway**, **Load Balancer**, **Stateless Backend Replicas**, **Redis Cache**, **PostgreSQL Database**, **MinIO S3 Storage**, and **Kubernetes HPA Autoscaler**.
@@ -23,7 +42,7 @@ The platform visually demonstrates how a modern cloud-native system processes AP
   - **Standard Distributed Tier**: Multi-replica backend, CDN, Redis, PostgreSQL, and MinIO.
   - **Single Backend Pod**: 1 replica without autoscaling.
   - **Kubernetes HPA**: Dynamic auto-scaling based on real-time CPU thresholds.
-  - **CDN Bypass**: Instant route rerouting directly from Client to API Gateway.
+  - **CDN Bypass**: Instant route rerouting directly from Client to API Gateway with visual bypass styling.
   - **Single Database Tier**: Dedicated database connection pool monitoring.
 - **Independent Component Testing**: Dedicated tabs to execute isolated operations on Redis (GET, SET, DEL, TTL, FLUSHALL), PostgreSQL (SELECT, INSERT, seed reset), MinIO (list, read, write JSON objects), Load Balancer (traffic distribution test across algorithms), CDN (edge cache hits/misses), and HPA (CPU spike injection).
 - **Interactive API Console**: Integrated REST API tester with predefined endpoints, headers, payloads, and response telemetry.
@@ -58,7 +77,7 @@ The platform visually demonstrates how a modern cloud-native system processes AP
 git clone https://github.com/your-username/Request-Flow-Visualizer.git
 cd Request-Flow-Visualizer
 
-# Install dependencies
+# Install dependencies and build
 npm run build:backend
 npm run build:frontend
 ```
