@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sliders, Save, CheckCircle2 } from 'lucide-react';
 import { useSystem } from '../../context/SystemContext';
 
@@ -21,6 +21,23 @@ export const ConfigManagementView: React.FC = () => {
 
   const [redisEnabled, setRedisEnabled] = useState(config?.redis.enabled ?? true);
   const [redisTtl, setRedisTtl] = useState(config?.redis.ttlSeconds ?? 60);
+
+  // Sync state if config updates dynamically (e.g. via HPA autoscaling or presets)
+  useEffect(() => {
+    if (config) {
+      setCdnEnabled(config.cdn.enabled);
+      setCdnTtl(config.cdn.ttlSeconds);
+      setCdnLatency(config.cdn.simulatedLatencyMs);
+      setLbAlgorithm(config.loadBalancer.algorithm);
+      setLbReplicas(config.loadBalancer.replicas);
+      setBackendReplicas(config.backend.activeReplicas);
+      setAutoscalingEnabled(config.backend.autoscalingEnabled);
+      setTargetCpu(config.backend.targetCpuPercent);
+      setArtificialDelay(config.backend.artificialDelayMs);
+      setRedisEnabled(config.redis.enabled);
+      setRedisTtl(config.redis.ttlSeconds);
+    }
+  }, [config]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,7 +160,7 @@ export const ConfigManagementView: React.FC = () => {
                 <input
                   type="number"
                   min="1"
-                  max="8"
+                  max="12"
                   value={backendReplicas}
                   onChange={(e) => setBackendReplicas(parseInt(e.target.value, 10))}
                   className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"

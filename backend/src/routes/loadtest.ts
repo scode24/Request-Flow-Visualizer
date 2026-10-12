@@ -9,12 +9,12 @@ router.post('/start', async (req: Request, res: Response) => {
   try {
     const { scenario, concurrentUsers, durationSeconds, targetRps } = req.body;
 
-    // Validation
+    // Validation with expanded capacity
     const testConfig: LoadTestConfig = {
       scenario: scenario || 'get_product_cached',
-      concurrentUsers: Math.min(250, Math.max(1, parseInt(concurrentUsers || '10', 10))),
-      durationSeconds: Math.min(120, Math.max(3, parseInt(durationSeconds || '15', 10))),
-      targetRps: targetRps ? Math.min(1000, Math.max(1, parseInt(targetRps, 10))) : undefined,
+      concurrentUsers: Math.min(1000, Math.max(1, parseInt(concurrentUsers || '10', 10))),
+      durationSeconds: Math.min(600, Math.max(3, parseInt(durationSeconds || '15', 10))),
+      targetRps: targetRps ? Math.min(5000, Math.max(1, parseInt(targetRps, 10))) : undefined,
     };
 
     const host = req.get('host') || `localhost:${config.port}`;

@@ -301,7 +301,23 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               if (d.cache) setCacheMetrics(d.cache);
               if (d.storage) setStorageMetrics(d.storage);
               if (d.cdn) setCdnMetrics(d.cdn);
-              if (d.loadBalancer) setLoadBalancerMetrics(d.loadBalancer);
+              if (d.loadBalancer) {
+                setLoadBalancerMetrics(d.loadBalancer);
+                if (d.loadBalancer.instances?.length) {
+                  setConfig((prev) => {
+                    if (prev.backend.activeReplicas !== d.loadBalancer.instances.length) {
+                      return {
+                        ...prev,
+                        backend: {
+                          ...prev.backend,
+                          activeReplicas: d.loadBalancer.instances.length,
+                        },
+                      };
+                    }
+                    return prev;
+                  });
+                }
+              }
               if (d.autoscaler) setAutoscalerMetrics(d.autoscaler);
               if (d.loadTest) setLoadTestStatus(d.loadTest);
               break;
@@ -327,6 +343,13 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
             case 'scaling_event': {
               if (msg.event) {
+                setConfig((prev) => ({
+                  ...prev,
+                  backend: {
+                    ...prev.backend,
+                    activeReplicas: msg.event.newReplicas,
+                  },
+                }));
                 setAutoscalerMetrics((prev) => ({
                   ...prev,
                   currentReplicas: msg.event.newReplicas,

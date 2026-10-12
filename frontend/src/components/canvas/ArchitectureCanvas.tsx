@@ -44,11 +44,17 @@ export const ArchitectureCanvas: React.FC = () => {
   const {
     config,
     loadBalancerMetrics,
+    autoscalerMetrics,
   } = useSystem();
   const { theme } = useTheme();
 
-  // Resolve active replica count
-  const replicaCount = config?.backend?.activeReplicas ?? (loadBalancerMetrics?.instances?.length || 3);
+  // Resolve active replica count: live instances reported by load balancer takes priority,
+  // falling back to autoscaler metrics, config, or default 3.
+  const replicaCount =
+    loadBalancerMetrics?.instances?.length ||
+    autoscalerMetrics?.currentReplicas ||
+    config?.backend?.activeReplicas ||
+    3;
   const cdnEnabled = config?.cdn?.enabled ?? true;
   const redisEnabled = config?.redis?.enabled ?? true;
   const autoscalingEnabled = config?.backend?.autoscalingEnabled ?? false;
@@ -103,12 +109,17 @@ export const ArchitectureCanvas: React.FC = () => {
     ];
 
     // Position backend replicas vertically centered around y = 240
-    const startY = replicaCount === 1 ? 240 : Math.max(80, 240 - ((replicaCount - 1) * 110) / 2);
+    // Keep startY at least 120 so Autoscaler at y = 20 has clean vertical clearance
+    const startY =
+      replicaCount <= 3
+        ? 240 - ((replicaCount - 1) * 110) / 2
+        : Math.max(120, 240 - ((replicaCount - 1) * 100) / 2);
+
     replicaList.forEach((rep, idx) => {
       nodes.push({
         id: rep.id,
         type: 'backend',
-        position: { x: 1040, y: startY + idx * 110 },
+        position: { x: 1040, y: startY + idx * (replicaCount > 4 ? 98 : 110) },
         data: {
           instanceId: rep.id,
           index: rep.index,
@@ -117,11 +128,11 @@ export const ArchitectureCanvas: React.FC = () => {
       });
     });
 
-    // Autoscaler node
+    // Autoscaler node cleanly positioned above backend cluster
     nodes.push({
       id: 'autoscaler',
       type: 'autoscaler',
-      position: { x: 1040, y: Math.min(20, startY - 95) },
+      position: { x: 1040, y: 20 },
       data: {
         enabled: autoscalingEnabled,
       },
@@ -212,9 +223,13 @@ export const ArchitectureCanvas: React.FC = () => {
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graphData.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graphData.edges);
+  const prevReplicaCountRef = useRef(replicaCount);
 
   // Sync nodes & edges whenever structural topology updates while preserving measured dimensions & positions
   useEffect(() => {
+    const replicaCountChanged = prevReplicaCountRef.current !== replicaCount;
+    prevReplicaCountRef.current = replicaCount;
+
     setNodes((currentNodes) => {
       const existingMap = new Map(currentNodes.map((n) => [n.id, n]));
       return graphData.nodes.map((newNode) => {
@@ -222,6 +237,7 @@ export const ArchitectureCanvas: React.FC = () => {
         if (!existing) {
           return newNode;
         }
+        const isBackendPod = newNode.id.startsWith('backend-instance-');
         return {
           ...existing,
           ...newNode,
@@ -230,7 +246,8 @@ export const ArchitectureCanvas: React.FC = () => {
           width: existing.width,
           height: existing.height,
           selected: existing.selected,
-          position: existing.position || newNode.position,
+          // When replica count changes, reposition backend pods so they are evenly aligned and clean
+          position: (replicaCountChanged && isBackendPod) ? newNode.position : (existing.position || newNode.position),
           data: {
             ...existing.data,
             ...newNode.data,
@@ -239,7 +256,7 @@ export const ArchitectureCanvas: React.FC = () => {
       });
     });
     setEdges(graphData.edges);
-  }, [graphData, setNodes, setEdges]);
+  }, [graphData, replicaCount, setNodes, setEdges]);
 
   const handleResetLayout = () => {
     setNodes((currentNodes) => {

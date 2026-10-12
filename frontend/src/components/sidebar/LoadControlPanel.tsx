@@ -71,38 +71,155 @@ export const LoadControlPanel: React.FC = () => {
           </select>
         </div>
 
-        {/* Concurrency & Duration */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">Users (VU)</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{concurrentUsers}</span>
+        {/* Traffic Workload Presets */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Workload Preset
+            </label>
+            <span className="text-[10px] text-slate-400">Quick Setup</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-[11px]">
+            {[
+              { label: 'Smoke', users: 10, duration: 15 },
+              { label: 'Medium', users: 50, duration: 60 },
+              { label: 'Stress', users: 150, duration: 120 },
+              { label: 'HPA Spike', users: 300, duration: 180 },
+              { label: 'Heavy', users: 500, duration: 300 },
+              { label: 'Max Surge', users: 1000, duration: 300 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                disabled={isRunning}
+                onClick={() => {
+                  setConcurrentUsers(p.users);
+                  setDurationSeconds(p.duration);
+                }}
+                className={`py-1 px-1.5 rounded-md border text-center transition-all truncate font-medium ${
+                  concurrentUsers === p.users && durationSeconds === p.duration
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-semibold'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/30'
+                }`}
+                title={`${p.users} users for ${p.duration}s`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Concurrency & Duration with Quick Pills & Direct Input */}
+        <div className="space-y-3.5">
+          {/* Concurrent Users */}
+          <div className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Virtual Users (VU)
+              </span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value={concurrentUsers}
+                  onChange={(e) => setConcurrentUsers(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 1)))}
+                  disabled={isRunning}
+                  className="w-16 px-1.5 py-0.5 text-right font-mono font-bold text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                <span className="text-[11px] font-mono text-slate-400">VU</span>
+              </div>
             </div>
+
             <input
               type="range"
               min="1"
-              max="150"
-              value={concurrentUsers}
+              max="500"
+              value={Math.min(500, concurrentUsers)}
               onChange={(e) => setConcurrentUsers(parseInt(e.target.value, 10))}
               disabled={isRunning}
-              className="w-full accent-emerald-500"
+              className="w-full accent-emerald-500 cursor-pointer"
             />
+
+            {/* Quick user pills */}
+            <div className="flex justify-between gap-1 mt-1.5">
+              {[10, 25, 50, 100, 250, 500, 1000].map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  disabled={isRunning}
+                  onClick={() => setConcurrentUsers(u)}
+                  className={`text-[10px] px-1.5 py-0.5 rounded font-mono transition-colors ${
+                    concurrentUsers === u
+                      ? 'bg-emerald-500 text-white font-bold'
+                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-emerald-600'
+                  }`}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">Duration</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{durationSeconds}s</span>
+          {/* Test Duration */}
+          <div className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800">
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Duration
+              </span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="5"
+                  max="600"
+                  value={durationSeconds}
+                  onChange={(e) => setDurationSeconds(Math.max(5, Math.min(600, parseInt(e.target.value, 10) || 5)))}
+                  disabled={isRunning}
+                  className="w-16 px-1.5 py-0.5 text-right font-mono font-bold text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                <span className="text-[11px] font-mono text-slate-400">
+                  {durationSeconds >= 60 ? `${(durationSeconds / 60).toFixed(1)}m` : 'sec'}
+                </span>
+              </div>
             </div>
+
             <input
               type="range"
               min="5"
-              max="60"
-              value={durationSeconds}
+              max="300"
+              step="5"
+              value={Math.min(300, durationSeconds)}
               onChange={(e) => setDurationSeconds(parseInt(e.target.value, 10))}
               disabled={isRunning}
-              className="w-full accent-emerald-500"
+              className="w-full accent-emerald-500 cursor-pointer"
             />
+
+            {/* Quick duration pills */}
+            <div className="flex justify-between gap-1 mt-1.5">
+              {[
+                { sec: 15, label: '15s' },
+                { sec: 30, label: '30s' },
+                { sec: 60, label: '1m' },
+                { sec: 120, label: '2m' },
+                { sec: 180, label: '3m' },
+                { sec: 300, label: '5m' },
+                { sec: 600, label: '10m' },
+              ].map((d) => (
+                <button
+                  key={d.sec}
+                  type="button"
+                  disabled={isRunning}
+                  onClick={() => setDurationSeconds(d.sec)}
+                  className={`text-[10px] px-1.5 py-0.5 rounded font-mono transition-colors ${
+                    durationSeconds === d.sec
+                      ? 'bg-emerald-500 text-white font-bold'
+                      : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-emerald-600'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -209,28 +326,28 @@ export const LoadControlPanel: React.FC = () => {
                 <input
                   type="range"
                   min="0"
-                  max="500"
-                  step="25"
+                  max="2000"
+                  step="50"
                   value={targetRps}
                   onChange={(e) => setTargetRps(parseInt(e.target.value, 10))}
                   disabled={isRunning}
-                  className="w-full accent-emerald-500"
+                  className="w-full accent-emerald-500 cursor-pointer"
                 />
               </div>
 
               <div>
                 <div className="flex justify-between text-[11px] mb-1">
                   <span className="text-slate-600 dark:text-slate-400">Pod Replicas</span>
-                  <span className="font-mono">{config?.backend.activeReplicas || 3}</span>
+                  <span className="font-mono">{config?.backend.activeReplicas || 3} Pods</span>
                 </div>
                 <input
                   type="range"
                   min="1"
-                  max="8"
+                  max="12"
                   value={config?.backend.activeReplicas || 3}
                   onChange={(e) => updateConfig({ backend: { activeReplicas: parseInt(e.target.value, 10) } })}
                   disabled={isRunning || config?.backend.autoscalingEnabled}
-                  className="w-full accent-emerald-500"
+                  className="w-full accent-emerald-500 cursor-pointer"
                 />
               </div>
             </div>

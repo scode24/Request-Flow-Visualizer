@@ -111,8 +111,8 @@ class LoadGeneratorService {
   private async runWorkerPool(config: LoadTestConfig, baseUrl: string, signal: AbortSignal): Promise<void> {
     const endTime = Date.now() + config.durationSeconds * 1000;
     const workers = Array.from({ length: config.concurrentUsers }).map(async (_, idx) => {
-      // Stagger worker start slightly to avoid immediate spike
-      await new Promise((r) => setTimeout(r, idx * 15));
+      // Stagger worker start smoothly to avoid thundering herd while ramping up fast
+      await new Promise((r) => setTimeout(r, Math.min(1500, idx * 3)));
 
       while (!signal.aborted && Date.now() < endTime) {
         const loopStart = Date.now();
