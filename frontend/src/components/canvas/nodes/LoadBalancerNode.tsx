@@ -18,7 +18,9 @@ export const LoadBalancerNode: React.FC<{ data?: any }> = ({ data }) => {
       subtitle={`NGINX (${algo})`}
       icon={Split}
       iconColor="bg-blue-500 text-blue-600 dark:text-blue-400"
-      status="healthy"
+      status={activeConns > 20 ? 'degraded' : 'healthy'}
+      loadPercent={Math.min(100, Math.max(5, activeConns * 3))}
+      loadLabel="Ingress Load"
       targetHandle={Position.Left}
       sourceHandle={Position.Right}
       metrics={[

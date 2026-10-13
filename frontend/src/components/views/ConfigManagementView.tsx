@@ -22,6 +22,11 @@ export const ConfigManagementView: React.FC = () => {
   const [redisEnabled, setRedisEnabled] = useState(config?.redis.enabled ?? true);
   const [redisTtl, setRedisTtl] = useState(config?.redis.ttlSeconds ?? 60);
 
+  const [dbMode, setDbMode] = useState(config?.database?.mode ?? 'standalone');
+  const [dbReplicas, setDbReplicas] = useState(config?.database?.replicasCount ?? 2);
+  const [dbShards, setDbShards] = useState(config?.database?.shardsCount ?? 2);
+  const [dbShardingKey, setDbShardingKey] = useState(config?.database?.shardingKey ?? 'hash');
+
   // Sync state if config updates dynamically (e.g. via HPA autoscaling or presets)
   useEffect(() => {
     if (config) {
@@ -36,6 +41,12 @@ export const ConfigManagementView: React.FC = () => {
       setArtificialDelay(config.backend.artificialDelayMs);
       setRedisEnabled(config.redis.enabled);
       setRedisTtl(config.redis.ttlSeconds);
+      if (config.database) {
+        setDbMode(config.database.mode);
+        setDbReplicas(config.database.replicasCount);
+        setDbShards(config.database.shardsCount);
+        setDbShardingKey(config.database.shardingKey);
+      }
     }
   }, [config]);
 
@@ -51,6 +62,12 @@ export const ConfigManagementView: React.FC = () => {
         artificialDelayMs: artificialDelay,
       },
       redis: { enabled: redisEnabled, ttlSeconds: redisTtl },
+      database: {
+        mode: dbMode,
+        replicasCount: dbReplicas,
+        shardsCount: dbShards,
+        shardingKey: dbShardingKey,
+      },
     });
     setSavedAlert(true);
     setTimeout(() => setSavedAlert(false), 3000);
@@ -228,6 +245,68 @@ export const ConfigManagementView: React.FC = () => {
                   className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Database Architecture & Sharding Settings */}
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+              PostgreSQL Architecture & Scaling Tier
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Architecture Topology</label>
+                <select
+                  value={dbMode}
+                  onChange={(e) => setDbMode(e.target.value as any)}
+                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                >
+                  <option value="standalone">Standalone (Single Primary Instance)</option>
+                  <option value="read-replicas">Read Replicas (Primary Leader + Replicas)</option>
+                  <option value="sharded">Sharded Cluster (Horizontal Partitioning)</option>
+                </select>
+              </div>
+
+              {dbMode === 'read-replicas' && (
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-400 mb-1">Read Replicas Count (1-4)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="4"
+                    value={dbReplicas}
+                    onChange={(e) => setDbReplicas(parseInt(e.target.value, 10))}
+                    className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                  />
+                </div>
+              )}
+
+              {dbMode === 'sharded' && (
+                <>
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 mb-1">Shards Partitions Count (2-4)</label>
+                    <input
+                      type="number"
+                      min="2"
+                      max="4"
+                      value={dbShards}
+                      onChange={(e) => setDbShards(parseInt(e.target.value, 10))}
+                      className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 mb-1">Partition Key Scheme</label>
+                    <select
+                      value={dbShardingKey}
+                      onChange={(e) => setDbShardingKey(e.target.value as any)}
+                      className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      <option value="hash">Consistent Hash Routing</option>
+                      <option value="range">Range Partitioning (ID Buckets)</option>
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

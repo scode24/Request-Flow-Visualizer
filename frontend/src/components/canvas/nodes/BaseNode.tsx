@@ -11,6 +11,8 @@ interface BaseNodeProps {
   iconColor: string;
   status?: 'healthy' | 'active' | 'degraded' | 'idle' | 'bypassed';
   metrics?: Array<{ label: string; value: string | number; badge?: string }>;
+  loadPercent?: number;
+  loadLabel?: string;
   targetHandle?: boolean | Position;
   sourceHandle?: boolean | Position;
   additionalHandles?: Array<{ type: 'target' | 'source'; position: Position; id?: string }>;
@@ -24,6 +26,8 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   iconColor,
   status = 'healthy',
   metrics = [],
+  loadPercent,
+  loadLabel,
   targetHandle = Position.Left,
   sourceHandle = Position.Right,
   additionalHandles = [],
@@ -32,6 +36,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   const isActive = !!activeNodeHighlights[id];
   const isSelected = selectedNodeId === id;
   const isBypassed = status === 'bypassed';
+  const isHeavyLoad = typeof loadPercent === 'number' && loadPercent > 80;
 
   const getStatusColor = () => {
     switch (status) {
@@ -52,13 +57,15 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
   return (
     <div
       onClick={() => setSelectedNodeId(id)}
-      className={`relative min-w-[210px] rounded-xl border p-3.5 shadow-sm transition-all duration-200 cursor-pointer select-none hover:shadow-md ${
+      className={`relative min-w-[220px] rounded-xl border p-3.5 shadow-sm transition-all duration-200 cursor-pointer select-none hover:shadow-md ${
         isBypassed
           ? 'opacity-65 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50'
           : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
       } ${
         isActive
           ? 'ring-2 ring-emerald-500 shadow-emerald-500/20 shadow-lg scale-[1.02] opacity-100 !border-solid'
+          : isHeavyLoad
+          ? 'ring-1 ring-rose-400 dark:ring-rose-500/80 shadow-rose-500/10 shadow-md'
           : isSelected
           ? 'ring-2 ring-indigo-500 border-indigo-400 opacity-100'
           : ''
@@ -85,7 +92,7 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
       ))}
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 mb-2.5">
+      <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2.5">
           <div className={`p-2 rounded-lg ${iconColor} bg-opacity-10 text-opacity-100 flex items-center justify-center`}>
             <Icon className="w-5 h-5" />
@@ -113,6 +120,41 @@ export const BaseNode: React.FC<BaseNodeProps> = ({
           )}
         </div>
       </div>
+
+      {/* Live Load Meter Gauge */}
+      {typeof loadPercent === 'number' && (
+        <div className="my-2 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800/80">
+          <div className="flex items-center justify-between text-[10px] mb-1 font-mono">
+            <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1 truncate">
+              <span className={`w-1.5 h-1.5 rounded-full ${loadPercent > 80 ? 'bg-rose-500 animate-ping' : loadPercent > 50 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+              {loadLabel || 'Load'}
+            </span>
+            <span className={`font-bold px-1 py-0.2 rounded text-[10px] ${
+              loadPercent > 80
+                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                : loadPercent > 50
+                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+            }`}>
+              {Math.round(loadPercent)}%
+            </span>
+          </div>
+
+          {/* Load Progress bar with smooth gradient */}
+          <div className="w-full bg-slate-200 dark:bg-slate-700/80 h-1.5 rounded-full overflow-hidden relative">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                loadPercent > 80
+                  ? 'bg-gradient-to-r from-amber-500 to-rose-500'
+                  : loadPercent > 50
+                  ? 'bg-gradient-to-r from-emerald-500 to-amber-500'
+                  : 'bg-gradient-to-r from-teal-400 to-emerald-500'
+              }`}
+              style={{ width: `${Math.min(100, Math.max(3, loadPercent))}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Metrics Section */}
       {metrics.length > 0 && (

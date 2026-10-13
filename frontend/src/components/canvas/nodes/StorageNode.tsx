@@ -15,6 +15,8 @@ export const StorageNode: React.FC = () => {
       icon={HardDrive}
       iconColor="bg-amber-500 text-amber-600 dark:text-amber-400"
       status="healthy"
+      loadPercent={Math.min(100, Math.max(8, ((storageMetrics?.totalReads || 0) + (storageMetrics?.totalWrites || 0)) * 2 % 100))}
+      loadLabel="I/O Bandwidth"
       targetHandle={Position.Left}
       sourceHandle={false}
       metrics={[

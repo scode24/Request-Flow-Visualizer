@@ -105,6 +105,14 @@ router.post('/', (req: Request, res: Response) => {
       }
     }
 
+    // Database scaling & sharding updates
+    if (updates.database) {
+      const dbMode = updates.database.mode || config.database.mode;
+      const dbReplicas = typeof updates.database.replicasCount === 'number' ? updates.database.replicasCount : config.database.replicasCount;
+      const dbShards = typeof updates.database.shardsCount === 'number' ? updates.database.shardsCount : config.database.shardsCount;
+      databaseService.setConfiguration(dbMode, dbReplicas, dbShards);
+    }
+
     const updatedMetrics = {
       loadBalancer: loadBalancerService.getMetrics(),
       autoscaler: autoscalerService.getMetrics(),

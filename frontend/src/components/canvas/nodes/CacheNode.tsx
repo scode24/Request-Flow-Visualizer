@@ -17,6 +17,8 @@ export const CacheNode: React.FC<{ data?: any }> = ({ data }) => {
       icon={Zap}
       iconColor="bg-red-500 text-red-600 dark:text-red-400"
       status={!enabled ? 'bypassed' : 'healthy'}
+      loadPercent={enabled ? Math.min(100, Math.max(5, (cacheMetrics?.keysCount || 4) * 8)) : 0}
+      loadLabel="Memory Usage"
       targetHandle={Position.Left}
       sourceHandle={false}
       metrics={[

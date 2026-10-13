@@ -20,6 +20,8 @@ export const BackendNode: React.FC<{ data: { instanceId: string; index: number; 
       icon={Server}
       iconColor="bg-emerald-500 text-emerald-600 dark:text-emerald-400"
       status={status}
+      loadPercent={cpu}
+      loadLabel="Pod CPU"
       targetHandle={Position.Left}
       sourceHandle={Position.Right}
       metrics={[

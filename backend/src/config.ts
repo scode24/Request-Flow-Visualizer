@@ -48,6 +48,12 @@ export interface SystemConfig {
     artificialDelayMs: number;
     autoscalingEnabled: boolean;
   };
+  database: {
+    mode: 'standalone' | 'read-replicas' | 'sharded';
+    replicasCount: number;
+    shardsCount: number;
+    shardingKey: 'hash' | 'range';
+  };
   infrastructureMode: 'standard' | 'single-backend' | 'hpa' | 'cdn-bypass' | 'single-db';
 }
 
@@ -97,6 +103,12 @@ export const config: SystemConfig = {
     targetCpuPercent: parseInt(process.env.BACKEND_TARGET_CPU || '65', 10),
     artificialDelayMs: parseInt(process.env.ARTIFICIAL_DELAY_MS || '0', 10),
     autoscalingEnabled: process.env.AUTOSCALING_ENABLED === 'true',
+  },
+  database: {
+    mode: (process.env.DB_MODE as any) || 'standalone',
+    replicasCount: parseInt(process.env.DB_REPLICAS || '2', 10),
+    shardsCount: parseInt(process.env.DB_SHARDS || '2', 10),
+    shardingKey: 'hash',
   },
   infrastructureMode: (process.env.INFRASTRUCTURE_MODE as any) || 'standard',
 };

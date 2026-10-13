@@ -51,6 +51,17 @@ export interface LoadBalancerMetrics {
   instances: BackendInstance[];
 }
 
+export interface DatabaseNodeMetric {
+  id: string;
+  name: string;
+  role: 'primary' | 'replica' | 'shard';
+  shardKey?: string;
+  totalQueries: number;
+  activeConnections: number;
+  cpuPercent: number;
+  status: 'healthy' | 'active' | 'degraded';
+}
+
 export interface DatabaseMetrics {
   connected: boolean;
   isRealPostgres: boolean;
@@ -60,6 +71,10 @@ export interface DatabaseMetrics {
   waitingClients: number;
   avgQueryDurationMs: number;
   lastQueryDurationMs: number;
+  mode?: 'standalone' | 'read-replicas' | 'sharded';
+  replicasCount?: number;
+  shardsCount?: number;
+  nodes?: DatabaseNodeMetric[];
 }
 
 export interface CacheMetrics {
@@ -186,6 +201,12 @@ export interface SystemConfig {
     targetCpuPercent: number;
     artificialDelayMs: number;
     autoscalingEnabled: boolean;
+  };
+  database: {
+    mode: 'standalone' | 'read-replicas' | 'sharded';
+    replicasCount: number;
+    shardsCount: number;
+    shardingKey: 'hash' | 'range';
   };
   infrastructureMode: 'standard' | 'single-backend' | 'hpa' | 'cdn-bypass' | 'single-db';
 }

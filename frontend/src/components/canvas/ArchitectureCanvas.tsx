@@ -148,17 +148,85 @@ export const ArchitectureCanvas: React.FC = () => {
       },
     });
 
-    nodes.push({
-      id: 'database',
-      type: 'database',
-      position: { x: 1350, y: 240 },
-      data: {},
+    // Dynamic Database Tier (Standalone, Read-Replicas, Sharded Cluster)
+    const dbMode = config?.database?.mode || 'standalone';
+    const dbReplicas = config?.database?.replicasCount || 2;
+    const dbShards = config?.database?.shardsCount || 2;
+    const dbShardingKey = config?.database?.shardingKey || 'hash';
+
+    const dbNodeList: Array<{
+      id: string;
+      name: string;
+      role: 'primary' | 'replica' | 'shard';
+      shardKey?: string;
+      index?: number;
+      y: number;
+    }> = [];
+
+    const dbBaseY = 240;
+    if (dbMode === 'standalone') {
+      dbNodeList.push({
+        id: 'database-primary',
+        name: 'PostgreSQL Primary',
+        role: 'primary',
+        y: dbBaseY,
+      });
+    } else if (dbMode === 'read-replicas') {
+      dbNodeList.push({
+        id: 'database-primary',
+        name: 'PG Leader (RW)',
+        role: 'primary',
+        y: dbBaseY,
+      });
+      for (let i = 1; i <= dbReplicas; i++) {
+        dbNodeList.push({
+          id: `database-replica-${i}`,
+          name: `PG Read Replica #${i}`,
+          role: 'replica',
+          index: i,
+          y: dbBaseY + i * 110,
+        });
+      }
+    } else {
+      // sharded
+      for (let i = 1; i <= dbShards; i++) {
+        const shardRange =
+          dbShardingKey === 'hash'
+            ? `Hash [${Math.round(((i - 1) * 100) / dbShards)}%-${Math.round((i * 100) / dbShards)}%]`
+            : `ID Range [${(i - 1) * 25000}-${i * 25000}]`;
+        dbNodeList.push({
+          id: `database-shard-${i}`,
+          name: `DB Shard #${i}`,
+          role: 'shard',
+          shardKey: shardRange,
+          index: i,
+          y: dbBaseY + (i - 1) * 110,
+        });
+      }
+    }
+
+    dbNodeList.forEach((dbNode) => {
+      nodes.push({
+        id: dbNode.id,
+        type: 'database',
+        position: { x: 1350, y: dbNode.y },
+        data: {
+          nodeId: dbNode.id,
+          name: dbNode.name,
+          role: dbNode.role,
+          shardKey: dbNode.shardKey,
+          index: dbNode.index,
+        },
+      });
     });
+
+    const maxDbY = dbNodeList.reduce((max, n) => Math.max(max, n.y), dbBaseY);
+    const storageY = Math.max(380, maxDbY + 115);
 
     nodes.push({
       id: 'storage',
       type: 'storage',
-      position: { x: 1350, y: 370 },
+      position: { x: 1350, y: storageY },
       data: {},
     });
 
@@ -195,9 +263,59 @@ export const ArchitectureCanvas: React.FC = () => {
       if (redisEnabled) {
         edges.push({ id: `e-${rep.id}-cache`, source: rep.id, target: 'cache', type: 'animated' });
       }
-      edges.push({ id: `e-${rep.id}-database`, source: rep.id, target: 'database', type: 'animated' });
+
+      // Backend Replicas to Database Tier
+      if (dbMode === 'standalone') {
+        edges.push({
+          id: `e-${rep.id}-database-primary`,
+          source: rep.id,
+          target: 'database-primary',
+          type: 'animated',
+        });
+      } else if (dbMode === 'read-replicas') {
+        // Connect to primary (writes & reads)
+        edges.push({
+          id: `e-${rep.id}-database-primary`,
+          source: rep.id,
+          target: 'database-primary',
+          type: 'animated',
+        });
+        // Connect to each read replica (read operations)
+        for (let i = 1; i <= dbReplicas; i++) {
+          edges.push({
+            id: `e-${rep.id}-database-replica-${i}`,
+            source: rep.id,
+            target: `database-replica-${i}`,
+            type: 'animated',
+          });
+        }
+      } else {
+        // Sharded: connect to each shard partition
+        for (let i = 1; i <= dbShards; i++) {
+          edges.push({
+            id: `e-${rep.id}-database-shard-${i}`,
+            source: rep.id,
+            target: `database-shard-${i}`,
+            type: 'animated',
+          });
+        }
+      }
+
       edges.push({ id: `e-${rep.id}-storage`, source: rep.id, target: 'storage', type: 'animated' });
     });
+
+    // Replication Sync Edges between Primary Leader and Read Replicas
+    if (dbMode === 'read-replicas') {
+      for (let i = 1; i <= dbReplicas; i++) {
+        edges.push({
+          id: `e-repl-database-primary-database-replica-${i}`,
+          source: 'database-primary',
+          target: `database-replica-${i}`,
+          type: 'animated',
+          style: { strokeDasharray: '4 4', stroke: '#38bdf8' },
+        });
+      }
+    }
 
     // Autoscaler control connection
     if (autoscalingEnabled && replicaList.length > 0) {
@@ -219,16 +337,25 @@ export const ArchitectureCanvas: React.FC = () => {
     autoscalingEnabled,
     lbAlgorithm,
     lbReplicas,
+    config?.database?.mode,
+    config?.database?.replicasCount,
+    config?.database?.shardsCount,
+    config?.database?.shardingKey,
   ]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(graphData.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graphData.edges);
   const prevReplicaCountRef = useRef(replicaCount);
+  const prevDbSigRef = useRef(`${config?.database?.mode}-${config?.database?.replicasCount}-${config?.database?.shardsCount}`);
 
   // Sync nodes & edges whenever structural topology updates while preserving measured dimensions & positions
   useEffect(() => {
+    const currentDbSig = `${config?.database?.mode}-${config?.database?.replicasCount}-${config?.database?.shardsCount}`;
     const replicaCountChanged = prevReplicaCountRef.current !== replicaCount;
+    const dbTopologyChanged = prevDbSigRef.current !== currentDbSig;
+
     prevReplicaCountRef.current = replicaCount;
+    prevDbSigRef.current = currentDbSig;
 
     setNodes((currentNodes) => {
       const existingMap = new Map(currentNodes.map((n) => [n.id, n]));
@@ -238,6 +365,12 @@ export const ArchitectureCanvas: React.FC = () => {
           return newNode;
         }
         const isBackendPod = newNode.id.startsWith('backend-instance-');
+        const isDbOrStorage = newNode.id.startsWith('database-') || newNode.id === 'storage';
+
+        const shouldResetPos =
+          (replicaCountChanged && isBackendPod) ||
+          (dbTopologyChanged && isDbOrStorage);
+
         return {
           ...existing,
           ...newNode,
@@ -246,8 +379,8 @@ export const ArchitectureCanvas: React.FC = () => {
           width: existing.width,
           height: existing.height,
           selected: existing.selected,
-          // When replica count changes, reposition backend pods so they are evenly aligned and clean
-          position: (replicaCountChanged && isBackendPod) ? newNode.position : (existing.position || newNode.position),
+          // When topology changes, reposition relevant pods/shards smoothly
+          position: shouldResetPos ? newNode.position : (existing.position || newNode.position),
           data: {
             ...existing.data,
             ...newNode.data,
@@ -256,7 +389,7 @@ export const ArchitectureCanvas: React.FC = () => {
       });
     });
     setEdges(graphData.edges);
-  }, [graphData, replicaCount, setNodes, setEdges]);
+  }, [graphData, replicaCount, config?.database?.mode, config?.database?.replicasCount, config?.database?.shardsCount, setNodes, setEdges]);
 
   const handleResetLayout = () => {
     setNodes((currentNodes) => {

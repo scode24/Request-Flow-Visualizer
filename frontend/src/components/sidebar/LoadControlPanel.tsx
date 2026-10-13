@@ -350,6 +350,99 @@ export const LoadControlPanel: React.FC = () => {
                   className="w-full accent-emerald-500 cursor-pointer"
                 />
               </div>
+
+              {/* Database Scaling & Sharding Tier Controls */}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  Database Architecture
+                </label>
+                <select
+                  value={config?.database?.mode || 'standalone'}
+                  onChange={(e) =>
+                    updateConfig({
+                      database: {
+                        mode: e.target.value as 'standalone' | 'read-replicas' | 'sharded',
+                      },
+                    })
+                  }
+                  disabled={isRunning}
+                  className="w-full text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5"
+                >
+                  <option value="standalone">Standalone (Single Primary)</option>
+                  <option value="read-replicas">Read Replicas (Leader + Replicas)</option>
+                  <option value="sharded">Sharded Cluster (Partitions)</option>
+                </select>
+              </div>
+
+              {config?.database?.mode === 'read-replicas' && (
+                <div>
+                  <div className="flex justify-between text-[11px] mb-1">
+                    <span className="text-slate-600 dark:text-slate-400">Read Replicas</span>
+                    <span className="font-mono text-blue-500 font-semibold">{config?.database?.replicasCount || 2} Replicas</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="4"
+                    value={config?.database?.replicasCount || 2}
+                    onChange={(e) =>
+                      updateConfig({
+                        database: {
+                          replicasCount: parseInt(e.target.value, 10),
+                        },
+                      })
+                    }
+                    disabled={isRunning}
+                    className="w-full accent-blue-500 cursor-pointer"
+                  />
+                </div>
+              )}
+
+              {config?.database?.mode === 'sharded' && (
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-slate-600 dark:text-slate-400">Shards Partitions</span>
+                      <span className="font-mono text-indigo-500 font-semibold">{config?.database?.shardsCount || 2} Shards</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="2"
+                      max="4"
+                      value={config?.database?.shardsCount || 2}
+                      onChange={(e) =>
+                        updateConfig({
+                          database: {
+                            shardsCount: parseInt(e.target.value, 10),
+                          },
+                        })
+                      }
+                      disabled={isRunning}
+                      className="w-full accent-indigo-500 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      Sharding Distribution Key
+                    </label>
+                    <select
+                      value={config?.database?.shardingKey || 'hash'}
+                      onChange={(e) =>
+                        updateConfig({
+                          database: {
+                            shardingKey: e.target.value as 'hash' | 'range',
+                          },
+                        })
+                      }
+                      disabled={isRunning}
+                      className="w-full text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5"
+                    >
+                      <option value="hash">Consistent Hash Routing</option>
+                      <option value="range">Range Partitioning (ID Buckets)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

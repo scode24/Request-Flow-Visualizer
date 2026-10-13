@@ -11,6 +11,24 @@ export interface Product {
   created_at: string;
 }
 
+export interface DatabaseNodeMetric {
+  id: string;
+  name: string;
+  role: 'primary' | 'replica' | 'shard';
+  shardKey?: string;
+  totalQueries: number;
+  activeConnections: number;
+  cpuPercent: number;
+  status: 'healthy' | 'active' | 'degraded';
+}
+
+export interface DatabaseQueryResult<T> {
+  data: T;
+  durationMs: number;
+  targetNodeId: string;
+  targetRole: 'primary' | 'replica' | 'shard';
+}
+
 export interface DatabaseMetrics {
   connected: boolean;
   isRealPostgres: boolean;
@@ -20,6 +38,10 @@ export interface DatabaseMetrics {
   waitingClients: number;
   avgQueryDurationMs: number;
   lastQueryDurationMs: number;
+  mode: 'standalone' | 'read-replicas' | 'sharded';
+  replicasCount: number;
+  shardsCount: number;
+  nodes: DatabaseNodeMetric[];
 }
 
 class DatabaseService {
@@ -28,6 +50,8 @@ class DatabaseService {
   private totalQueries = 0;
   private queryDurations: number[] = [];
   private lastQueryDurationMs = 0;
+  private nodes: DatabaseNodeMetric[] = [];
+  private replicaRoundRobin = 0;
 
   // In-memory fallback dataset for seamless local execution
   private mockProducts: Product[] = [
@@ -39,7 +63,178 @@ class DatabaseService {
   ];
 
   constructor() {
+    this.initNodes();
     this.init();
+    this.startLoadJitterLoop();
+  }
+
+  public initNodes() {
+    const mode = config.database.mode;
+    const replicas = Math.max(1, Math.min(4, config.database.replicasCount));
+    const shards = Math.max(2, Math.min(4, config.database.shardsCount));
+    const newNodes: DatabaseNodeMetric[] = [];
+
+    if (mode === 'standalone') {
+      newNodes.push({
+        id: 'database-primary',
+        name: 'PostgreSQL Primary',
+        role: 'primary',
+        totalQueries: 0,
+        activeConnections: 1,
+        cpuPercent: 12,
+        status: 'healthy',
+      });
+    } else if (mode === 'read-replicas') {
+      // Primary Node for writes & fallback reads
+      newNodes.push({
+        id: 'database-primary',
+        name: 'Primary (Leader / R+W)',
+        role: 'primary',
+        totalQueries: 0,
+        activeConnections: 2,
+        cpuPercent: 18,
+        status: 'healthy',
+      });
+      // Scaled Read Replicas
+      for (let i = 1; i <= replicas; i++) {
+        newNodes.push({
+          id: `database-replica-${i}`,
+          name: `Read Replica #${i} (Async)`,
+          role: 'replica',
+          totalQueries: 0,
+          activeConnections: 1,
+          cpuPercent: 10,
+          status: 'healthy',
+        });
+      }
+    } else if (mode === 'sharded') {
+      // Partitioned Shards
+      const ranges = [
+        'Hash [0x00 - 0x3F]',
+        'Hash [0x40 - 0x7F]',
+        'Hash [0x80 - 0xBF]',
+        'Hash [0xC0 - 0xFF]',
+      ];
+      for (let i = 1; i <= shards; i++) {
+        newNodes.push({
+          id: `database-shard-${i}`,
+          name: `DB Shard #${i}`,
+          role: 'shard',
+          shardKey: ranges[i - 1] || `Partition #${i}`,
+          totalQueries: 0,
+          activeConnections: 1,
+          cpuPercent: 14,
+          status: 'healthy',
+        });
+      }
+    }
+
+    this.nodes = newNodes;
+  }
+
+  public setConfiguration(
+    mode: 'standalone' | 'read-replicas' | 'sharded',
+    replicasCount?: number,
+    shardsCount?: number
+  ) {
+    config.database.mode = mode;
+    if (typeof replicasCount === 'number') {
+      config.database.replicasCount = Math.max(1, Math.min(4, replicasCount));
+    }
+    if (typeof shardsCount === 'number') {
+      config.database.shardsCount = Math.max(2, Math.min(4, shardsCount));
+    }
+    this.initNodes();
+  }
+
+  private startLoadJitterLoop() {
+    setInterval(() => {
+      // Simulate realistic fluctuation of active connections & CPU based on recent queries
+      for (const node of this.nodes) {
+        const jitter = Math.floor(Math.random() * 4) - 2;
+        const baseCpu = node.activeConnections * 5 + 10;
+        node.cpuPercent = Math.max(5, Math.min(95, baseCpu + jitter));
+        if (node.activeConnections > 1 && Math.random() > 0.6) {
+          node.activeConnections = Math.max(1, node.activeConnections - 1);
+        }
+      }
+    }, 3000);
+  }
+
+  private selectReadNode(idHint?: number): DatabaseNodeMetric {
+    if (this.nodes.length === 0) this.initNodes();
+    const mode = config.database.mode;
+
+    if (mode === 'read-replicas') {
+      const replicas = this.nodes.filter((n) => n.role === 'replica');
+      if (replicas.length > 0) {
+        const selected = replicas[this.replicaRoundRobin % replicas.length];
+        this.replicaRoundRobin++;
+        selected.activeConnections = Math.min(10, selected.activeConnections + 1);
+        selected.totalQueries++;
+        return selected;
+      }
+    } else if (mode === 'sharded') {
+      const shards = this.nodes.filter((n) => n.role === 'shard');
+      if (shards.length > 0) {
+        const shardIdx = ((idHint ?? this.replicaRoundRobin++) % shards.length);
+        const selected = shards[shardIdx];
+        selected.activeConnections = Math.min(10, selected.activeConnections + 1);
+        selected.totalQueries++;
+        return selected;
+      }
+    }
+
+    const primary = this.nodes.find((n) => n.role === 'primary') || this.nodes[0];
+    if (primary) {
+      primary.activeConnections = Math.min(10, primary.activeConnections + 1);
+      primary.totalQueries++;
+      return primary;
+    }
+
+    return {
+      id: 'database-primary',
+      name: 'PostgreSQL Primary',
+      role: 'primary',
+      totalQueries: 1,
+      activeConnections: 1,
+      cpuPercent: 15,
+      status: 'healthy',
+    };
+  }
+
+  private selectWriteNode(idHint?: number): DatabaseNodeMetric {
+    if (this.nodes.length === 0) this.initNodes();
+    const mode = config.database.mode;
+
+    if (mode === 'sharded') {
+      const shards = this.nodes.filter((n) => n.role === 'shard');
+      if (shards.length > 0) {
+        const shardIdx = ((idHint ?? this.mockProducts.length) % shards.length);
+        const selected = shards[shardIdx];
+        selected.activeConnections = Math.min(10, selected.activeConnections + 1);
+        selected.totalQueries++;
+        return selected;
+      }
+    }
+
+    // Standalone and Read-Replicas both write directly to Primary
+    const primary = this.nodes.find((n) => n.role === 'primary') || this.nodes[0];
+    if (primary) {
+      primary.activeConnections = Math.min(10, primary.activeConnections + 1);
+      primary.totalQueries++;
+      return primary;
+    }
+
+    return {
+      id: 'database-primary',
+      name: 'PostgreSQL Primary',
+      role: 'primary',
+      totalQueries: 1,
+      activeConnections: 1,
+      cpuPercent: 15,
+      status: 'healthy',
+    };
   }
 
   private async init() {
@@ -93,9 +288,10 @@ class DatabaseService {
     }
   }
 
-  public async getProductById(id: number): Promise<{ product: Product | null; durationMs: number }> {
+  public async getProductById(id: number): Promise<{ product: Product | null; durationMs: number; targetNodeId: string; targetRole: 'primary' | 'replica' | 'shard' }> {
     const start = Date.now();
     this.totalQueries++;
+    const target = this.selectReadNode(id);
 
     if (this.isConnected && this.pool) {
       try {
@@ -105,6 +301,8 @@ class DatabaseService {
         return {
           product: res.rows[0] ? (res.rows[0] as Product) : null,
           durationMs: duration,
+          targetNodeId: target.id,
+          targetRole: target.role,
         };
       } catch (err) {
         console.error('[PostgreSQL] Query failed, using fallback:', err);
@@ -116,19 +314,30 @@ class DatabaseService {
     const duration = Date.now() - start;
     this.recordDuration(duration);
     const product = this.mockProducts.find((p) => p.id === id) || null;
-    return { product, durationMs: duration };
+    return {
+      product,
+      durationMs: duration,
+      targetNodeId: target.id,
+      targetRole: target.role,
+    };
   }
 
-  public async listProducts(): Promise<{ products: Product[]; durationMs: number }> {
+  public async listProducts(): Promise<{ products: Product[]; durationMs: number; targetNodeId: string; targetRole: 'primary' | 'replica' | 'shard' }> {
     const start = Date.now();
     this.totalQueries++;
+    const target = this.selectReadNode();
 
     if (this.isConnected && this.pool) {
       try {
         const res = await this.pool.query('SELECT * FROM products ORDER BY id ASC LIMIT 50');
         const duration = Date.now() - start;
         this.recordDuration(duration);
-        return { products: res.rows as Product[], durationMs: duration };
+        return {
+          products: res.rows as Product[],
+          durationMs: duration,
+          targetNodeId: target.id,
+          targetRole: target.role,
+        };
       } catch (err) {
         console.error('[PostgreSQL] List query failed, using fallback:', err);
       }
@@ -137,14 +346,20 @@ class DatabaseService {
     await new Promise((resolve) => setTimeout(resolve, 8));
     const duration = Date.now() - start;
     this.recordDuration(duration);
-    return { products: [...this.mockProducts], durationMs: duration };
+    return {
+      products: [...this.mockProducts],
+      durationMs: duration,
+      targetNodeId: target.id,
+      targetRole: target.role,
+    };
   }
 
   public async createProduct(
     productData: Omit<Product, 'id' | 'created_at'>
-  ): Promise<{ product: Product; durationMs: number }> {
+  ): Promise<{ product: Product; durationMs: number; targetNodeId: string; targetRole: 'primary' | 'shard' }> {
     const start = Date.now();
     this.totalQueries++;
+    const target = this.selectWriteNode();
 
     if (this.isConnected && this.pool) {
       try {
@@ -154,7 +369,12 @@ class DatabaseService {
         );
         const duration = Date.now() - start;
         this.recordDuration(duration);
-        return { product: res.rows[0] as Product, durationMs: duration };
+        return {
+          product: res.rows[0] as Product,
+          durationMs: duration,
+          targetNodeId: target.id,
+          targetRole: target.role as 'primary' | 'shard',
+        };
       } catch (err) {
         console.error('[PostgreSQL] Insert failed, using fallback:', err);
       }
@@ -170,7 +390,12 @@ class DatabaseService {
       created_at: new Date().toISOString(),
     };
     this.mockProducts.push(newProduct);
-    return { product: newProduct, durationMs: duration };
+    return {
+      product: newProduct,
+      durationMs: duration,
+      targetNodeId: target.id,
+      targetRole: target.role as 'primary' | 'shard',
+    };
   }
 
   public async resetSeedData(): Promise<{ success: boolean; durationMs: number }> {
@@ -224,15 +449,21 @@ class DatabaseService {
           ) / 10
         : 0;
 
+    const totalActiveConns = this.nodes.reduce((acc, n) => acc + n.activeConnections, 0);
+
     return {
       connected: this.isConnected,
       isRealPostgres: this.isConnected,
       totalQueries: this.totalQueries,
-      activeConnections: this.isConnected && this.pool ? this.pool.totalCount - this.pool.idleCount : 1,
-      idleConnections: this.isConnected && this.pool ? this.pool.idleCount : 4,
-      waitingClients: this.isConnected && this.pool ? this.pool.waitingCount : 0,
+      activeConnections: totalActiveConns,
+      idleConnections: Math.max(1, (this.nodes.length * 4) - totalActiveConns),
+      waitingClients: 0,
       avgQueryDurationMs: avgDuration,
       lastQueryDurationMs: this.lastQueryDurationMs,
+      mode: config.database.mode,
+      replicasCount: config.database.replicasCount,
+      shardsCount: config.database.shardsCount,
+      nodes: [...this.nodes],
     };
   }
 }

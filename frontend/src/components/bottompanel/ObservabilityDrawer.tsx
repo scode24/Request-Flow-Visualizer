@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { ChevronUp, ChevronDown, Activity, ListFilter, FileCode2, History } from 'lucide-react';
+import { ChevronUp, ChevronDown, Terminal, ListFilter, FileCode2, History } from 'lucide-react';
 import { LiveTraceList } from './LiveTraceList';
-import { MetricsDashboard } from './MetricsDashboard';
+import { InteractiveTerminal } from './InteractiveTerminal';
 import { ResponseInspector } from './ResponseInspector';
 import { useSystem } from '../../context/SystemContext';
 
-type Tab = 'traces' | 'metrics' | 'response' | 'events';
+type Tab = 'terminal' | 'traces' | 'response' | 'events';
 
 export const ObservabilityDrawer: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>('traces');
+  const [activeTab, setActiveTab] = useState<Tab>('terminal');
   const { autoscalerMetrics, recentTraces } = useSystem();
 
   return (
@@ -22,6 +22,18 @@ export const ObservabilityDrawer: React.FC = () => {
       <div className="h-10 px-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
         <div className="flex items-center gap-1">
           <button
+            onClick={() => { setActiveTab('terminal'); setIsExpanded(true); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              activeTab === 'terminal' && isExpanded
+                ? 'bg-emerald-600 text-white shadow-sm border border-emerald-500'
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span>Interactive Terminal</span>
+          </button>
+
+          <button
             onClick={() => { setActiveTab('traces'); setIsExpanded(true); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
               activeTab === 'traces' && isExpanded
@@ -31,18 +43,6 @@ export const ObservabilityDrawer: React.FC = () => {
           >
             <ListFilter className="w-3.5 h-3.5" />
             <span>Distributed Traces ({recentTraces.length})</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveTab('metrics'); setIsExpanded(true); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              activeTab === 'metrics' && isExpanded
-                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200 dark:border-slate-700'
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Activity className="w-3.5 h-3.5" />
-            <span>Metrics & Resources</span>
           </button>
 
           <button
@@ -83,8 +83,8 @@ export const ObservabilityDrawer: React.FC = () => {
       {/* Drawer Content */}
       {isExpanded && (
         <div className="flex-1 overflow-hidden">
+          {activeTab === 'terminal' && <InteractiveTerminal />}
           {activeTab === 'traces' && <LiveTraceList />}
-          {activeTab === 'metrics' && <MetricsDashboard />}
           {activeTab === 'response' && <ResponseInspector />}
           {activeTab === 'events' && (
             <div className="h-full overflow-y-auto p-4 space-y-2 text-xs font-mono">

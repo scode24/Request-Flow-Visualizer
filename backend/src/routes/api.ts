@@ -127,11 +127,12 @@ router.get('/products/:id', async (req: Request, res: Response) => {
       const dbRes = await databaseService.getProductById(productId);
       productData = dbRes.product;
 
-      Tracer.addSpan(trace.traceId, 'database', 'POSTGRES_QUERY', 'success', null, 'postgres-primary', {
+      Tracer.addSpan(trace.traceId, 'database', 'POSTGRES_QUERY', 'success', null, dbRes.targetNodeId || 'database-primary', {
         query: 'SELECT * FROM products WHERE id = $1',
         params: [productId],
         durationMs: dbRes.durationMs,
         rowsReturned: productData ? 1 : 0,
+        nodeRole: dbRes.targetRole,
       }, dbRes.durationMs);
 
       // Populate Redis Cache for subsequent requests
@@ -197,10 +198,11 @@ router.get('/products', async (req: Request, res: Response) => {
     }, 1);
 
     const dbRes = await databaseService.listProducts();
-    Tracer.addSpan(trace.traceId, 'database', 'POSTGRES_QUERY', 'success', null, 'postgres-primary', {
+    Tracer.addSpan(trace.traceId, 'database', 'POSTGRES_QUERY', 'success', null, dbRes.targetNodeId || 'database-primary', {
       query: 'SELECT * FROM products ORDER BY id ASC LIMIT 50',
       durationMs: dbRes.durationMs,
       rowsReturned: dbRes.products.length,
+      nodeRole: dbRes.targetRole,
     }, dbRes.durationMs);
 
     loadBalancerService.releaseConnection(selectedPod.id, Date.now() - reqStart);
@@ -253,9 +255,10 @@ router.post('/products', async (req: Request, res: Response) => {
       category: category || 'General',
     });
 
-    Tracer.addSpan(trace.traceId, 'database', 'POSTGRES_INSERT', 'success', null, 'postgres-primary', {
+    Tracer.addSpan(trace.traceId, 'database', 'POSTGRES_INSERT', 'success', null, dbRes.targetNodeId || 'database-primary', {
       insertedId: dbRes.product.id,
       durationMs: dbRes.durationMs,
+      nodeRole: dbRes.targetRole,
     }, dbRes.durationMs);
 
     // Invalidate CDN cache for product list

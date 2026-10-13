@@ -79,6 +79,12 @@ const defaultInitialConfig: SystemConfig = {
     artificialDelayMs: 0,
     autoscalingEnabled: false,
   },
+  database: {
+    mode: 'standalone',
+    replicasCount: 2,
+    shardsCount: 2,
+    shardingKey: 'hash',
+  },
   infrastructureMode: 'standard',
 };
 
@@ -129,6 +135,12 @@ const defaultInitialDbMetrics: DatabaseMetrics = {
   waitingClients: 0,
   avgQueryDurationMs: 8.5,
   lastQueryDurationMs: 8.5,
+  mode: 'standalone',
+  replicasCount: 2,
+  shardsCount: 2,
+  nodes: [
+    { id: 'database-primary', name: 'PostgreSQL Primary', role: 'primary', totalQueries: 0, activeConnections: 1, cpuPercent: 12, status: 'healthy' },
+  ],
 };
 
 const defaultInitialStorageMetrics: StorageMetrics = {
@@ -234,6 +246,9 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         triggerEdgeHighlight('e-backend-cache');
         break;
       case 'database':
+        if (span.instanceId) {
+          triggerEdgeHighlight(`e-backend-${span.instanceId}`);
+        }
         triggerEdgeHighlight('e-backend-database');
         break;
       case 'storage':
@@ -485,9 +500,24 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       }
       if (updates.redis) Object.assign(next.redis, updates.redis);
+      if (updates.database) {
+        next.database = {
+          ...(prev.database || { mode: 'standalone', replicasCount: 2, shardsCount: 2, shardingKey: 'hash' }),
+          ...updates.database,
+        };
+      }
 
       return next;
     });
+
+    if (updates.database) {
+      setDatabaseMetrics((prev) => ({
+        ...prev,
+        mode: updates.database.mode ?? prev.mode,
+        replicasCount: updates.database.replicasCount ?? prev.replicasCount,
+        shardsCount: updates.database.shardsCount ?? prev.shardsCount,
+      }));
+    }
 
     // Update loadBalancerMetrics instances immediately if replica count or mode changed
     if (resolvedReplicas !== undefined || updates.loadBalancer?.algorithm || updates.loadBalancer?.replicas) {
