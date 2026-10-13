@@ -77,6 +77,17 @@ export interface DatabaseMetrics {
   nodes?: DatabaseNodeMetric[];
 }
 
+export interface CacheNodeMetric {
+  id: string;
+  name: string;
+  hashRingSlot?: string;
+  keysCount: number;
+  hits: number;
+  misses: number;
+  cpuPercent: number;
+  status: 'healthy' | 'active' | 'degraded';
+}
+
 export interface CacheMetrics {
   connected: boolean;
   isRealRedis: boolean;
@@ -87,6 +98,26 @@ export interface CacheMetrics {
   keysCount: number;
   evictions: number;
   avgOpDurationMs: number;
+  clusterMode?: 'standalone' | 'cluster';
+  nodesCount?: number;
+  hashingStrategy?: 'consistent-hashing' | 'modulo';
+  nodes?: CacheNodeMetric[];
+}
+
+export interface ScalingAdvisoryEvent {
+  type: 'scaling_advisory';
+  level: 'warning' | 'suggestion' | 'info';
+  title: string;
+  message: string;
+  previousReplicas?: number;
+  targetReplicas?: number;
+  cpu?: number;
+  suggestion?: {
+    recommendedPods?: number;
+    recommendedCache?: 'standalone' | 'cluster';
+    recommendedDbMode?: 'standalone' | 'read-replicas' | 'sharded';
+  };
+  timestamp: number;
 }
 
 export interface StorageMetrics {
@@ -177,6 +208,9 @@ export interface SystemConfig {
     port: number;
     ttlSeconds: number;
     enabled: boolean;
+    clusterMode?: 'standalone' | 'cluster';
+    nodesCount?: number;
+    hashingStrategy?: 'consistent-hashing' | 'modulo';
   };
   minio: {
     endPoint: string;

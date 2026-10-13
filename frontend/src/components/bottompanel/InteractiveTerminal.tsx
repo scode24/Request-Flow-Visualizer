@@ -175,8 +175,27 @@ export const InteractiveTerminal: React.FC = () => {
             'success',
             `[DB-ENGINE] Database scaled to Primary Leader + ${count} Read Replicas with streaming replication.`
           );
+        } else if (args[0] === 'cache' && args[1]) {
+          const count = parseInt(args[1], 10);
+          if (isNaN(count) || count < 1 || count > 4) {
+            addLine('error', 'Error: Cache nodes count must be between 1 and 4.');
+            return;
+          }
+          const strategy = args[2] === 'modulo' ? 'modulo' : 'consistent-hashing';
+          const mode = count === 1 ? 'standalone' : 'cluster';
+          await updateConfig({
+            redis: {
+              clusterMode: mode,
+              nodesCount: count,
+              hashingStrategy: strategy,
+            },
+          });
+          addLine(
+            'success',
+            `[CACHE] Scaled Redis to ${count} ${mode} node(s) using '${strategy}' distribution.`
+          );
         } else {
-          addLine('error', "Usage: 'scale backend <1-8>' or 'scale db <1-4>'");
+          addLine('error', "Usage: 'scale backend <1-8>', 'scale db <1-4>', or 'scale cache <1-4> [consistent|modulo]'");
         }
         break;
       }
@@ -354,6 +373,8 @@ export const InteractiveTerminal: React.FC = () => {
           { label: 'top', cmd: 'top' },
           { label: 'status', cmd: 'status' },
           { label: 'scale backend 4', cmd: 'scale backend 4' },
+          { label: 'scale cache 3', cmd: 'scale cache 3 consistent' },
+          { label: 'cache standalone', cmd: 'scale cache 1' },
           { label: 'scale db 3', cmd: 'scale db 3' },
           { label: 'shard db 4', cmd: 'shard db 4' },
           { label: 'db standalone', cmd: 'db standalone' },

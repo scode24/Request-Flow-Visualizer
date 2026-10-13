@@ -106,14 +106,16 @@ router.get('/products/:id', async (req: Request, res: Response) => {
           productData = cacheRes.value;
         }
 
-        Tracer.addSpan(trace.traceId, 'cache', 'REDIS_GET', 'cache-hit', null, 'redis-master', {
+        Tracer.addSpan(trace.traceId, 'cache', 'REDIS_GET', 'cache-hit', null, cacheRes.targetNodeId, {
           key: cacheKey,
           durationMs: cacheRes.durationMs,
+          slot: cacheRes.slot,
         }, cacheRes.durationMs);
       } else {
-        Tracer.addSpan(trace.traceId, 'cache', 'REDIS_GET', 'cache-miss', null, 'redis-master', {
+        Tracer.addSpan(trace.traceId, 'cache', 'REDIS_GET', 'cache-miss', null, cacheRes.targetNodeId, {
           key: cacheKey,
           durationMs: cacheRes.durationMs,
+          slot: cacheRes.slot,
         }, cacheRes.durationMs);
       }
     } else {

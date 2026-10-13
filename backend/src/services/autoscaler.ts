@@ -34,10 +34,10 @@ class AutoscalerService {
     this.startEvaluationLoop();
   }
 
+  private lastSuggestionTime = 0;
+
   private startEvaluationLoop(): void {
     setInterval(() => {
-      if (!config.backend.autoscalingEnabled) return;
-
       const instances = loadBalancerService.getMetrics().instances;
       if (instances.length === 0) return;
 
@@ -47,22 +47,57 @@ class AutoscalerService {
 
       const now = Date.now();
       const timeSinceLastScale = (now - this.lastScalingTime) / 1000;
+      const timeSinceLastSuggestion = (now - this.lastSuggestionTime) / 1000;
 
-      // Scale Up Condition: CPU > target and below maxReplicas
-      if (avgCpu > config.backend.targetCpuPercent && instances.length < config.backend.maxReplicas) {
-        if (timeSinceLastScale >= this.cooldownSeconds) {
-          const newCount = Math.min(
-            config.backend.maxReplicas,
-            instances.length + Math.max(1, Math.ceil((avgCpu - config.backend.targetCpuPercent) / 20))
-          );
-          this.triggerScale('scale-up', instances.length, newCount, avgCpu, `Avg CPU (${avgCpu}%) exceeded target threshold (${config.backend.targetCpuPercent}%)`);
+      // If Autoscaling is ENABLED
+      if (config.backend.autoscalingEnabled) {
+        // Scale Up Condition: CPU > target and below maxReplicas
+        if (avgCpu > config.backend.targetCpuPercent && instances.length < config.backend.maxReplicas) {
+          if (timeSinceLastScale >= this.cooldownSeconds) {
+            const newCount = Math.min(
+              config.backend.maxReplicas,
+              instances.length + Math.max(1, Math.ceil((avgCpu - config.backend.targetCpuPercent) / 20))
+            );
+
+            // Pre-scaling advisory notification broadcast
+            broadcastEvent('scaling_advisory', {
+              type: 'scaling_advisory',
+              level: 'warning',
+              title: 'Autoscaler Trigger Imminent',
+              message: `Incoming load elevated CPU to ${avgCpu}% (threshold: ${config.backend.targetCpuPercent}%). Autoscaling is scaling pods from ${instances.length} to ${newCount}!`,
+              previousReplicas: instances.length,
+              targetReplicas: newCount,
+              cpu: avgCpu,
+              timestamp: Date.now(),
+            });
+
+            this.triggerScale('scale-up', instances.length, newCount, avgCpu, `Avg CPU (${avgCpu}%) exceeded target threshold (${config.backend.targetCpuPercent}%)`);
+          }
         }
-      }
-      // Scale Down Condition: CPU < (target - 25%) and above minReplicas
-      else if (avgCpu < config.backend.targetCpuPercent - 25 && instances.length > config.backend.minReplicas) {
-        if (timeSinceLastScale >= this.scaleDownStabilization) {
-          const newCount = Math.max(config.backend.minReplicas, instances.length - 1);
-          this.triggerScale('scale-down', instances.length, newCount, avgCpu, `Avg CPU (${avgCpu}%) stabilized well below target (${config.backend.targetCpuPercent}%)`);
+        // Scale Down Condition
+        else if (avgCpu < config.backend.targetCpuPercent - 25 && instances.length > config.backend.minReplicas) {
+          if (timeSinceLastScale >= this.scaleDownStabilization) {
+            const newCount = Math.max(config.backend.minReplicas, instances.length - 1);
+            this.triggerScale('scale-down', instances.length, newCount, avgCpu, `Avg CPU (${avgCpu}%) stabilized well below target (${config.backend.targetCpuPercent}%)`);
+          }
+        }
+      } else {
+        // Autoscaling is DISABLED: Provide intelligent recommendations if system is under stress
+        if (avgCpu > 65 && timeSinceLastSuggestion >= 8) {
+          this.lastSuggestionTime = now;
+          const recommendedCount = Math.min(8, instances.length + 2);
+          broadcastEvent('scaling_advisory', {
+            type: 'scaling_advisory',
+            level: 'suggestion',
+            title: 'Scaling Advisory (Autoscaler Disabled)',
+            message: `Pod CPU is under heavy strain (${avgCpu}%). Autoscaling is disabled. To prevent latency degradation and drop errors, scale backend pods to ${recommendedCount} or enable consistent hashing Redis cluster.`,
+            suggestion: {
+              recommendedPods: recommendedCount,
+              recommendedCache: 'cluster',
+              recommendedDbMode: 'read-replicas',
+            },
+            timestamp: Date.now(),
+          });
         }
       }
     }, 2000);

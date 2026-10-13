@@ -21,6 +21,9 @@ export const ConfigManagementView: React.FC = () => {
 
   const [redisEnabled, setRedisEnabled] = useState(config?.redis.enabled ?? true);
   const [redisTtl, setRedisTtl] = useState(config?.redis.ttlSeconds ?? 60);
+  const [redisClusterMode, setRedisClusterMode] = useState(config?.redis.clusterMode ?? 'standalone');
+  const [redisNodesCount, setRedisNodesCount] = useState(config?.redis.nodesCount ?? 2);
+  const [redisHashingStrategy, setRedisHashingStrategy] = useState(config?.redis.hashingStrategy ?? 'consistent-hashing');
 
   const [dbMode, setDbMode] = useState(config?.database?.mode ?? 'standalone');
   const [dbReplicas, setDbReplicas] = useState(config?.database?.replicasCount ?? 2);
@@ -41,6 +44,9 @@ export const ConfigManagementView: React.FC = () => {
       setArtificialDelay(config.backend.artificialDelayMs);
       setRedisEnabled(config.redis.enabled);
       setRedisTtl(config.redis.ttlSeconds);
+      if (config.redis.clusterMode) setRedisClusterMode(config.redis.clusterMode);
+      if (config.redis.nodesCount) setRedisNodesCount(config.redis.nodesCount);
+      if (config.redis.hashingStrategy) setRedisHashingStrategy(config.redis.hashingStrategy);
       if (config.database) {
         setDbMode(config.database.mode);
         setDbReplicas(config.database.replicasCount);
@@ -61,7 +67,13 @@ export const ConfigManagementView: React.FC = () => {
         targetCpuPercent: targetCpu,
         artificialDelayMs: artificialDelay,
       },
-      redis: { enabled: redisEnabled, ttlSeconds: redisTtl },
+      redis: {
+        enabled: redisEnabled,
+        ttlSeconds: redisTtl,
+        clusterMode: redisClusterMode,
+        nodesCount: redisNodesCount,
+        hashingStrategy: redisHashingStrategy,
+      },
       database: {
         mode: dbMode,
         replicasCount: dbReplicas,
@@ -245,6 +257,45 @@ export const ConfigManagementView: React.FC = () => {
                   className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
                 />
               </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Redis Architecture Mode</label>
+                <select
+                  value={redisClusterMode}
+                  onChange={(e) => setRedisClusterMode(e.target.value as any)}
+                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                >
+                  <option value="standalone">Standalone (Single Instance)</option>
+                  <option value="cluster">Cluster (Sharded Multi-Node)</option>
+                </select>
+              </div>
+
+              {redisClusterMode === 'cluster' && (
+                <>
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 mb-1">Cluster Nodes Count (2-4)</label>
+                    <input
+                      type="number"
+                      min="2"
+                      max="4"
+                      value={redisNodesCount}
+                      onChange={(e) => setRedisNodesCount(parseInt(e.target.value, 10))}
+                      className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-600 dark:text-slate-400 mb-1">Cache Hashing Strategy</label>
+                    <select
+                      value={redisHashingStrategy}
+                      onChange={(e) => setRedisHashingStrategy(e.target.value as any)}
+                      className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    >
+                      <option value="consistent-hashing">Consistent Hashing (Ring Arcs)</option>
+                      <option value="modulo">Modulo Hash (Simple Partitioning)</option>
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

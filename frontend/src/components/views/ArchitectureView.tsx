@@ -2,6 +2,7 @@ import React from 'react';
 import { LoadControlPanel } from '../sidebar/LoadControlPanel';
 import { ArchitectureCanvas } from '../canvas/ArchitectureCanvas';
 import { LiveLoadMatrixHUD } from '../canvas/LiveLoadMatrixHUD';
+import { ScalingAdvisoryBanner } from '../canvas/ScalingAdvisoryBanner';
 import { NodeDetailDrawer } from '../sidebar/NodeDetailDrawer';
 import { ObservabilityDrawer } from '../bottompanel/ObservabilityDrawer';
 
@@ -15,7 +16,9 @@ export const ArchitectureView: React.FC = () => {
         {/* Central Architecture React Flow Canvas */}
         <div className="flex-1 relative h-full">
           <ArchitectureCanvas />
-          {/* Live Load Matrix Overlay (Main Screen HUD) */}
+          {/* Pre-scaling Notification & Non-scaling Optimization Advisory */}
+          <ScalingAdvisoryBanner />
+          {/* Live Load Matrix Overlay (Main Screen Fixed HUD) */}
           <LiveLoadMatrixHUD />
           {/* Node Diagnostics Drawer */}
           <NodeDetailDrawer />

@@ -443,6 +443,74 @@ export const LoadControlPanel: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Redis Cache Scaling & Consistent Hashing Tier Controls */}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+                  Redis Cache Architecture
+                </label>
+                <select
+                  value={config?.redis?.clusterMode || 'standalone'}
+                  onChange={(e) =>
+                    updateConfig({
+                      redis: {
+                        clusterMode: e.target.value as 'standalone' | 'cluster',
+                      },
+                    })
+                  }
+                  disabled={isRunning}
+                  className="w-full text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5"
+                >
+                  <option value="standalone">Standalone (Single Cache Node)</option>
+                  <option value="cluster">Sharded Cluster (Multi-Node Hashing)</option>
+                </select>
+              </div>
+
+              {config?.redis?.clusterMode === 'cluster' && (
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="text-slate-600 dark:text-slate-400">Cache Nodes Count</span>
+                      <span className="font-mono text-red-500 font-semibold">{config?.redis?.nodesCount || 2} Nodes</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="2"
+                      max="4"
+                      value={config?.redis?.nodesCount || 2}
+                      onChange={(e) =>
+                        updateConfig({
+                          redis: {
+                            nodesCount: parseInt(e.target.value, 10),
+                          },
+                        })
+                      }
+                      disabled={isRunning}
+                      className="w-full accent-red-500 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      Cache Hashing Strategy
+                    </label>
+                    <select
+                      value={config?.redis?.hashingStrategy || 'consistent-hashing'}
+                      onChange={(e) =>
+                        updateConfig({
+                          redis: {
+                            hashingStrategy: e.target.value as 'consistent-hashing' | 'modulo',
+                          },
+                        })
+                      }
+                      disabled={isRunning}
+                      className="w-full text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5"
+                    >
+                      <option value="consistent-hashing">Consistent Hashing (Ring Arcs)</option>
+                      <option value="modulo">Modulo Hash (Simple Partitioning)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

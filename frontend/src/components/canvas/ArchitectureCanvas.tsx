@@ -138,15 +138,55 @@ export const ArchitectureCanvas: React.FC = () => {
       },
     });
 
-    // Infrastructure storage tier nodes on the right
-    nodes.push({
-      id: 'cache',
-      type: 'cache',
-      position: { x: 1350, y: 110 },
-      data: {
-        enabled: redisEnabled,
-      },
+    // Redis Cache Tier (Standalone vs Consistent Hashing Cluster)
+    const cacheClusterMode = config?.redis?.clusterMode || 'standalone';
+    const cacheNodesCount = cacheClusterMode === 'cluster' ? Math.max(2, Math.min(4, config?.redis?.nodesCount || 2)) : 1;
+    const cacheStrategy = config?.redis?.hashingStrategy || 'consistent-hashing';
+
+    const cacheNodeList: Array<{
+      id: string;
+      name: string;
+      hashRingSlot?: string;
+      index: number;
+      y: number;
+    }> = [];
+
+    const cacheStartY = 40;
+    for (let i = 1; i <= cacheNodesCount; i++) {
+      const id = cacheNodesCount === 1 ? 'cache-node-1' : `cache-node-${i}`;
+      const slot =
+        cacheClusterMode === 'cluster'
+          ? cacheStrategy === 'consistent-hashing'
+            ? `Ring [${Math.round(((i - 1) * 360) / cacheNodesCount)}°-${Math.round((i * 360) / cacheNodesCount)}°]`
+            : `Hash Modulo #${i}`
+          : 'Standalone Instance';
+
+      cacheNodeList.push({
+        id,
+        name: cacheNodesCount === 1 ? 'Redis Cache' : `Redis Node #${i}`,
+        hashRingSlot: slot,
+        index: i,
+        y: cacheStartY + (i - 1) * 110,
+      });
+    }
+
+    cacheNodeList.forEach((cNode) => {
+      nodes.push({
+        id: cNode.id,
+        type: 'cache',
+        position: { x: 1350, y: cNode.y },
+        data: {
+          nodeId: cNode.id,
+          name: cNode.name,
+          index: cNode.index,
+          hashRingSlot: cNode.hashRingSlot,
+          enabled: redisEnabled,
+        },
+      });
     });
+
+    const maxCacheY = cacheNodeList.reduce((max, n) => Math.max(max, n.y), cacheStartY);
+    const dbBaseY = Math.max(220, maxCacheY + 115);
 
     // Dynamic Database Tier (Standalone, Read-Replicas, Sharded Cluster)
     const dbMode = config?.database?.mode || 'standalone';
@@ -163,7 +203,6 @@ export const ArchitectureCanvas: React.FC = () => {
       y: number;
     }> = [];
 
-    const dbBaseY = 240;
     if (dbMode === 'standalone') {
       dbNodeList.push({
         id: 'database-primary',
@@ -259,9 +298,16 @@ export const ArchitectureCanvas: React.FC = () => {
         type: 'animated',
       });
 
-      // Backend Replicas to Storage Tier
+      // Backend Replicas to Redis Cache Tier
       if (redisEnabled) {
-        edges.push({ id: `e-${rep.id}-cache`, source: rep.id, target: 'cache', type: 'animated' });
+        cacheNodeList.forEach((cNode) => {
+          edges.push({
+            id: `e-${rep.id}-${cNode.id}`,
+            source: rep.id,
+            target: cNode.id,
+            type: 'animated',
+          });
+        });
       }
 
       // Backend Replicas to Database Tier
@@ -337,6 +383,9 @@ export const ArchitectureCanvas: React.FC = () => {
     autoscalingEnabled,
     lbAlgorithm,
     lbReplicas,
+    config?.redis?.clusterMode,
+    config?.redis?.nodesCount,
+    config?.redis?.hashingStrategy,
     config?.database?.mode,
     config?.database?.replicasCount,
     config?.database?.shardsCount,
@@ -347,15 +396,19 @@ export const ArchitectureCanvas: React.FC = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState(graphData.edges);
   const prevReplicaCountRef = useRef(replicaCount);
   const prevDbSigRef = useRef(`${config?.database?.mode}-${config?.database?.replicasCount}-${config?.database?.shardsCount}`);
+  const prevCacheSigRef = useRef(`${config?.redis?.clusterMode}-${config?.redis?.nodesCount}-${config?.redis?.hashingStrategy}`);
 
   // Sync nodes & edges whenever structural topology updates while preserving measured dimensions & positions
   useEffect(() => {
     const currentDbSig = `${config?.database?.mode}-${config?.database?.replicasCount}-${config?.database?.shardsCount}`;
+    const currentCacheSig = `${config?.redis?.clusterMode}-${config?.redis?.nodesCount}-${config?.redis?.hashingStrategy}`;
     const replicaCountChanged = prevReplicaCountRef.current !== replicaCount;
     const dbTopologyChanged = prevDbSigRef.current !== currentDbSig;
+    const cacheTopologyChanged = prevCacheSigRef.current !== currentCacheSig;
 
     prevReplicaCountRef.current = replicaCount;
     prevDbSigRef.current = currentDbSig;
+    prevCacheSigRef.current = currentCacheSig;
 
     setNodes((currentNodes) => {
       const existingMap = new Map(currentNodes.map((n) => [n.id, n]));
@@ -365,11 +418,14 @@ export const ArchitectureCanvas: React.FC = () => {
           return newNode;
         }
         const isBackendPod = newNode.id.startsWith('backend-instance-');
-        const isDbOrStorage = newNode.id.startsWith('database-') || newNode.id === 'storage';
+        const isInfraTier =
+          newNode.id.startsWith('cache-node-') ||
+          newNode.id.startsWith('database-') ||
+          newNode.id === 'storage';
 
         const shouldResetPos =
           (replicaCountChanged && isBackendPod) ||
-          (dbTopologyChanged && isDbOrStorage);
+          ((dbTopologyChanged || cacheTopologyChanged) && isInfraTier);
 
         return {
           ...existing,
@@ -389,7 +445,18 @@ export const ArchitectureCanvas: React.FC = () => {
       });
     });
     setEdges(graphData.edges);
-  }, [graphData, replicaCount, config?.database?.mode, config?.database?.replicasCount, config?.database?.shardsCount, setNodes, setEdges]);
+  }, [
+    graphData,
+    replicaCount,
+    config?.redis?.clusterMode,
+    config?.redis?.nodesCount,
+    config?.redis?.hashingStrategy,
+    config?.database?.mode,
+    config?.database?.replicasCount,
+    config?.database?.shardsCount,
+    setNodes,
+    setEdges,
+  ]);
 
   const handleResetLayout = () => {
     setNodes((currentNodes) => {

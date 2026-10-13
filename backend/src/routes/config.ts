@@ -103,6 +103,12 @@ router.post('/', (req: Request, res: Response) => {
       if (typeof updates.redis.ttlSeconds === 'number') {
         config.redis.ttlSeconds = updates.redis.ttlSeconds;
       }
+      if (updates.redis.clusterMode || typeof updates.redis.nodesCount === 'number' || updates.redis.hashingStrategy) {
+        const clusterMode = updates.redis.clusterMode || config.redis.clusterMode;
+        const nodesCount = typeof updates.redis.nodesCount === 'number' ? updates.redis.nodesCount : config.redis.nodesCount;
+        const hashingStrategy = updates.redis.hashingStrategy || config.redis.hashingStrategy;
+        cacheService.setConfiguration(clusterMode, nodesCount, hashingStrategy);
+      }
     }
 
     // Database scaling & sharding updates

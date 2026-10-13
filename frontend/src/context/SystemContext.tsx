@@ -11,6 +11,7 @@ import {
   LoadTestStatus,
   LoadTestConfig,
   SystemConfig,
+  ScalingAdvisoryEvent,
 } from '../types';
 
 interface SystemContextType {
@@ -28,6 +29,9 @@ interface SystemContextType {
   selectedNodeId: string | null;
   activeNodeHighlights: Record<string, boolean>;
   activeEdgeHighlights: Record<string, boolean>;
+  activeAdvisory: ScalingAdvisoryEvent | null;
+  dismissAdvisory: () => void;
+  triggerAdvisory: (advisory: ScalingAdvisoryEvent) => void;
   setSelectedNodeId: (id: string | null) => void;
   setSelectedTrace: (trace: TraceSummary | null) => void;
   startLoadTest: (testConfig: LoadTestConfig) => Promise<void>;
@@ -54,6 +58,9 @@ const defaultInitialConfig: SystemConfig = {
     port: 6379,
     ttlSeconds: 60,
     enabled: true,
+    clusterMode: 'standalone',
+    nodesCount: 2,
+    hashingStrategy: 'consistent-hashing',
   },
   minio: {
     endPoint: 'localhost',
@@ -124,6 +131,10 @@ const defaultInitialCacheMetrics: CacheMetrics = {
   keysCount: 0,
   evictions: 0,
   avgOpDurationMs: 1.2,
+  clusterMode: 'standalone',
+  nodesCount: 2,
+  hashingStrategy: 'consistent-hashing',
+  nodes: [],
 };
 
 const defaultInitialDbMetrics: DatabaseMetrics = {
@@ -184,6 +195,16 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [activeEdgeHighlights, setActiveEdgeHighlights] = useState<Record<string, boolean>>({});
 
   const nodeTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [activeAdvisory, setActiveAdvisory] = useState<ScalingAdvisoryEvent | null>(null);
+
+  const dismissAdvisory = useCallback(() => {
+    setActiveAdvisory(null);
+  }, []);
+
+  const triggerAdvisory = useCallback((adv: ScalingAdvisoryEvent) => {
+    setActiveAdvisory(adv);
+  }, []);
+
   const edgeTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -392,6 +413,10 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               }
               break;
             }
+            case 'scaling_advisory': {
+              setActiveAdvisory(msg);
+              break;
+            }
             case 'config_updated': {
               if (msg.config) setConfig(msg.config);
               if (msg.metrics) {
@@ -430,6 +455,36 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [fetchInitialData, handleTraceSpan]);
 
   const startLoadTest = async (testConfig: LoadTestConfig) => {
+    // Proactive Scaling / Advisory trigger before or during load execution
+    if (config.backend.autoscalingEnabled && testConfig.concurrentUsers >= 25) {
+      setActiveAdvisory({
+        type: 'scaling_advisory',
+        level: 'warning',
+        title: 'Impending Autoscaling Trigger',
+        message: `High concurrent traffic (${testConfig.concurrentUsers} users) initiated with Autoscaling enabled. CPU threshold is projected to breach ${config.backend.targetCpuPercent}%, triggering horizontal pod scaling from ${config.backend.activeReplicas} up to absorb the load!`,
+        previousReplicas: config.backend.activeReplicas,
+        targetReplicas: Math.min(
+          config.backend.maxReplicas,
+          Math.max(config.backend.activeReplicas + 2, Math.ceil(testConfig.concurrentUsers / 15))
+        ),
+        timestamp: Date.now(),
+      });
+    } else if (!config.backend.autoscalingEnabled && testConfig.concurrentUsers >= 25) {
+      const recPods = Math.min(8, Math.max(4, Math.ceil(testConfig.concurrentUsers / 12)));
+      setActiveAdvisory({
+        type: 'scaling_advisory',
+        level: 'suggestion',
+        title: 'Scaling Advisory (Autoscaler Disabled)',
+        message: `Executing ${testConfig.concurrentUsers} users on static ${config.backend.activeReplicas} pods without autoscaling. To avoid high latency and CPU throttling, consider scaling backend pods to ${recPods} or deploying Redis consistent hashing cluster.`,
+        suggestion: {
+          recommendedPods: recPods,
+          recommendedCache: 'cluster',
+          recommendedDbMode: 'read-replicas',
+        },
+        timestamp: Date.now(),
+      });
+    }
+
     const res = await fetch('/api/load-test/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -516,6 +571,16 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         mode: updates.database.mode ?? prev.mode,
         replicasCount: updates.database.replicasCount ?? prev.replicasCount,
         shardsCount: updates.database.shardsCount ?? prev.shardsCount,
+      }));
+    }
+
+    if (updates.redis) {
+      setCacheMetrics((prev) => ({
+        ...prev,
+        enabled: updates.redis.enabled ?? prev.enabled,
+        clusterMode: updates.redis.clusterMode ?? prev.clusterMode,
+        nodesCount: updates.redis.nodesCount ?? prev.nodesCount,
+        hashingStrategy: updates.redis.hashingStrategy ?? prev.hashingStrategy,
       }));
     }
 
@@ -618,6 +683,9 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         selectedNodeId,
         activeNodeHighlights,
         activeEdgeHighlights,
+        activeAdvisory,
+        dismissAdvisory,
+        triggerAdvisory,
         setSelectedNodeId,
         setSelectedTrace,
         startLoadTest,

@@ -19,6 +19,9 @@ export interface SystemConfig {
     password?: string;
     ttlSeconds: number;
     enabled: boolean;
+    clusterMode: 'standalone' | 'cluster';
+    nodesCount: number;
+    hashingStrategy: 'consistent-hashing' | 'modulo';
   };
   minio: {
     endPoint: string;
@@ -75,6 +78,9 @@ export const config: SystemConfig = {
     password: process.env.REDIS_PASSWORD || undefined,
     ttlSeconds: parseInt(process.env.REDIS_TTL || '60', 10),
     enabled: process.env.REDIS_ENABLED !== 'false',
+    clusterMode: (process.env.REDIS_CLUSTER_MODE as any) || 'standalone',
+    nodesCount: parseInt(process.env.REDIS_NODES || '2', 10),
+    hashingStrategy: (process.env.REDIS_HASH_STRATEGY as any) || 'consistent-hashing',
   },
   minio: {
     endPoint: process.env.MINIO_ENDPOINT || 'localhost',
