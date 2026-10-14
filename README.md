@@ -12,48 +12,6 @@ A modern, production-grade distributed systems visualization, real-time request 
 
 The platform visually demonstrates how a modern cloud-native system processes API requests, handles concurrent traffic, distributes load across pod replicas, evaluates caching tiers, queries relational databases, retrieves unstructured S3 objects, and automatically scales stateless compute using the Kubernetes Horizontal Pod Autoscaler (HPA).
 
----
-
-## ⚡ One-Click Quick Start
-
-Get the entire application up and running with a single command!
-
-### macOS / Linux
-```bash
-git clone https://github.com/your-username/Request-Flow-Visualizer.git
-cd Request-Flow-Visualizer
-
-# Run the automated setup script
-chmod +x setup.sh && ./setup.sh
-
-# Start backend & frontend concurrently
-npm run dev
-```
-
-### Windows
-```cmd
-git clone https://github.com/your-username/Request-Flow-Visualizer.git
-cd Request-Flow-Visualizer
-
-# Run the automated setup batch script
-setup.bat
-
-# Start backend & frontend concurrently
-npm run dev
-```
-
-### Alternatively via npm
-```bash
-npm run setup
-npm run dev
-```
-
-Open **[http://localhost:3000](http://localhost:3000)** in your browser!
-
-> 💡 **Zero-Dependency In-Memory Mode**: If live Docker services (PostgreSQL, Redis, MinIO) are not running on your machine, the backend transparently falls back to high-fidelity in-memory emulation. It works 100% out-of-the-box!
-
----
-
 ## 📸 Platform Screenshots
 
 ### 1. Interactive Architecture Flow Canvas (Light Mode)
@@ -126,6 +84,46 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser!
 | **Observability** | Prometheus (`prom-client`), Grafana dashboards |
 | **Containerization** | Docker, Docker Compose (multi-stage builds) |
 | **Orchestration** | Kubernetes manifests with HorizontalPodAutoscaler (HPA) |
+
+---
+
+## ⚡ One-Click Quick Start
+
+Get the entire application up and running with a single command!
+
+### macOS / Linux
+```bash
+git clone https://github.com/your-username/Request-Flow-Visualizer.git
+cd Request-Flow-Visualizer
+
+# Run the automated setup script
+chmod +x setup.sh && ./setup.sh
+
+# Start backend & frontend concurrently
+npm run dev
+```
+
+### Windows
+```cmd
+git clone https://github.com/your-username/Request-Flow-Visualizer.git
+cd Request-Flow-Visualizer
+
+# Run the automated setup batch script
+setup.bat
+
+# Start backend & frontend concurrently
+npm run dev
+```
+
+### Alternatively via npm
+```bash
+npm run setup
+npm run dev
+```
+
+Open **[http://localhost:3000](http://localhost:3000)** in your browser!
+
+> 💡 **Zero-Dependency In-Memory Mode**: If live Docker services (PostgreSQL, Redis, MinIO) are not running on your machine, the backend transparently falls back to high-fidelity in-memory emulation. It works 100% out-of-the-box!
 
 ---
 
