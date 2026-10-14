@@ -47,7 +47,9 @@ export const CacheNode: React.FC<CacheNodeProps> = ({ data }) => {
       iconColor="bg-red-500 text-red-600 dark:text-red-400"
       status={!enabled ? 'bypassed' : cpuPercent > 80 ? 'degraded' : 'healthy'}
       loadPercent={enabled ? cpuPercent : 0}
-      loadLabel={isCluster ? 'Node Load' : 'Memory Usage'}
+      loadLabel={isCluster ? 'Node Load' : 'Memory'}
+      badgeText={!enabled ? 'DISABLED' : isCluster ? 'HASH RING' : 'STANDALONE'}
+      badgeVariant={!enabled ? 'default' : isCluster ? 'warning' : 'danger'}
       targetHandle={Position.Left}
       sourceHandle={false}
       metrics={[
@@ -57,4 +59,3 @@ export const CacheNode: React.FC<CacheNodeProps> = ({ data }) => {
     />
   );
 };
-

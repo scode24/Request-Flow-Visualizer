@@ -9,6 +9,8 @@ import {
   Node,
   Edge,
   BackgroundVariant,
+  ReactFlowProvider,
+  useReactFlow,
 } from '@xyflow/react';
 import { ClientNode } from './nodes/ClientNode';
 import { CdnNode } from './nodes/CdnNode';
@@ -19,6 +21,8 @@ import { CacheNode } from './nodes/CacheNode';
 import { DatabaseNode } from './nodes/DatabaseNode';
 import { StorageNode } from './nodes/StorageNode';
 import { AutoscalerNode } from './nodes/AutoscalerNode';
+import { QueueNode } from './nodes/QueueNode';
+import { WorkerNode } from './nodes/WorkerNode';
 import { AnimatedEdge } from './edges/AnimatedEdge';
 import { useSystem } from '../../context/SystemContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -34,19 +38,22 @@ const nodeTypes = {
   database: DatabaseNode,
   storage: StorageNode,
   autoscaler: AutoscalerNode,
+  queue: QueueNode,
+  worker: WorkerNode,
 };
 
 const edgeTypes = {
   animated: AnimatedEdge,
 };
 
-export const ArchitectureCanvas: React.FC = () => {
+const ArchitectureCanvasContent: React.FC = () => {
   const {
     config,
     loadBalancerMetrics,
     autoscalerMetrics,
   } = useSystem();
   const { theme } = useTheme();
+  const { fitView } = useReactFlow();
 
   // Resolve active replica count: live instances reported by load balancer takes priority,
   // falling back to autoscaler metrics, config, or default 3.
@@ -72,19 +79,34 @@ export const ArchitectureCanvas: React.FC = () => {
 
   // Build reactive graph representation - ONLY recomputed when structural topology changes
   const graphData = useMemo(() => {
-    // 1. Build Nodes
+    // Robust, non-overlapping spacing constants
+    const NODE_STEP_Y = 180; // 145px node height + 35px generous clearance
+    const SECTION_GAP = 50;  // 50px clearance between distinct architectural tiers
+    const NODE_HEIGHT = 145; // Approximate rendered height for bounding calculations
+
+    // Horizontal column coordinates with generous ~60-80px horizontal gap
+    const COL_CLIENT = 40;
+    const COL_CDN = 280;
+    const COL_GATEWAY = 520;
+    const COL_LB = 760;
+    const COL_BACKEND = 1010;
+    const COL_INFRA = 1270;
+
+    // Stable vertical reference for Ingress pipeline
+    const ingressY = 220;
+
+    // 1. Build Ingress Nodes (Client, CDN, Gateway, Load Balancer)
     const nodes: Node[] = [
       {
         id: 'client',
         type: 'client',
-        position: { x: 50, y: 240 },
+        position: { x: COL_CLIENT, y: ingressY },
         data: {},
       },
       {
         id: 'cdn',
         type: 'cdn',
-        // In CDN bypass mode, shift CDN up slightly so direct bypass line is visually prominent
-        position: cdnEnabled ? { x: 290, y: 240 } : { x: 290, y: 110 },
+        position: cdnEnabled ? { x: COL_CDN, y: ingressY } : { x: COL_CDN, y: 80 },
         data: {
           enabled: cdnEnabled,
         },
@@ -92,7 +114,7 @@ export const ArchitectureCanvas: React.FC = () => {
       {
         id: 'gateway',
         type: 'gateway',
-        position: { x: 530, y: 240 },
+        position: { x: COL_GATEWAY, y: ingressY },
         data: {
           rateLimit: 1000,
         },
@@ -100,7 +122,7 @@ export const ArchitectureCanvas: React.FC = () => {
       {
         id: 'loadbalancer',
         type: 'loadbalancer',
-        position: { x: 770, y: 240 },
+        position: { x: COL_LB, y: ingressY },
         data: {
           algorithm: lbAlgorithm,
           replicas: lbReplicas,
@@ -108,18 +130,14 @@ export const ArchitectureCanvas: React.FC = () => {
       },
     ];
 
-    // Position backend replicas vertically centered around y = 240
-    // Keep startY at least 120 so Autoscaler at y = 20 has clean vertical clearance
-    const startY =
-      replicaCount <= 3
-        ? 240 - ((replicaCount - 1) * 110) / 2
-        : Math.max(120, 240 - ((replicaCount - 1) * 100) / 2);
-
+    // 2. Build Backend Replicas (Column 5)
+    // Fixed start at y = 180 (Autoscaler sits above at y = 30)
+    const backendStartY = 180;
     replicaList.forEach((rep, idx) => {
       nodes.push({
         id: rep.id,
         type: 'backend',
-        position: { x: 1040, y: startY + idx * (replicaCount > 4 ? 98 : 110) },
+        position: { x: COL_BACKEND, y: backendStartY + idx * NODE_STEP_Y },
         data: {
           instanceId: rep.id,
           index: rep.index,
@@ -128,21 +146,24 @@ export const ArchitectureCanvas: React.FC = () => {
       });
     });
 
-    // Autoscaler node cleanly positioned above backend cluster
+    // Autoscaler node cleanly positioned above backend cluster with 45px clearance
     nodes.push({
       id: 'autoscaler',
       type: 'autoscaler',
-      position: { x: 1040, y: 20 },
+      position: { x: COL_BACKEND, y: 30 },
       data: {
         enabled: autoscalingEnabled,
       },
     });
 
-    // Redis Cache Tier (Standalone vs Consistent Hashing Cluster)
+    const backendEndY = backendStartY + (replicaCount - 1) * NODE_STEP_Y + NODE_HEIGHT;
+
+    // 3. Redis Cache Tier (Column 6: Standalone vs Consistent Hashing Cluster)
     const cacheClusterMode = config?.redis?.clusterMode || 'standalone';
     const cacheNodesCount = cacheClusterMode === 'cluster' ? Math.max(2, Math.min(4, config?.redis?.nodesCount || 2)) : 1;
     const cacheStrategy = config?.redis?.hashingStrategy || 'consistent-hashing';
 
+    const cacheStartY = 40;
     const cacheNodeList: Array<{
       id: string;
       name: string;
@@ -151,7 +172,6 @@ export const ArchitectureCanvas: React.FC = () => {
       y: number;
     }> = [];
 
-    const cacheStartY = 40;
     for (let i = 1; i <= cacheNodesCount; i++) {
       const id = cacheNodesCount === 1 ? 'cache-node-1' : `cache-node-${i}`;
       const slot =
@@ -166,7 +186,7 @@ export const ArchitectureCanvas: React.FC = () => {
         name: cacheNodesCount === 1 ? 'Redis Cache' : `Redis Node #${i}`,
         hashRingSlot: slot,
         index: i,
-        y: cacheStartY + (i - 1) * 110,
+        y: cacheStartY + (i - 1) * NODE_STEP_Y,
       });
     }
 
@@ -174,7 +194,7 @@ export const ArchitectureCanvas: React.FC = () => {
       nodes.push({
         id: cNode.id,
         type: 'cache',
-        position: { x: 1350, y: cNode.y },
+        position: { x: COL_INFRA, y: cNode.y },
         data: {
           nodeId: cNode.id,
           name: cNode.name,
@@ -185,10 +205,10 @@ export const ArchitectureCanvas: React.FC = () => {
       });
     });
 
-    const maxCacheY = cacheNodeList.reduce((max, n) => Math.max(max, n.y), cacheStartY);
-    const dbBaseY = Math.max(220, maxCacheY + 115);
+    const cacheEndY = cacheStartY + (cacheNodesCount - 1) * NODE_STEP_Y + NODE_HEIGHT;
+    const dbBaseY = cacheEndY + SECTION_GAP;
 
-    // Dynamic Database Tier (Standalone, Read-Replicas, Sharded Cluster)
+    // 4. Dynamic Database Tier (Column 6: Standalone, Read-Replicas, Sharded Cluster)
     const dbMode = config?.database?.mode || 'standalone';
     const dbReplicas = config?.database?.replicasCount || 2;
     const dbShards = config?.database?.shardsCount || 2;
@@ -223,7 +243,7 @@ export const ArchitectureCanvas: React.FC = () => {
           name: `PG Read Replica #${i}`,
           role: 'replica',
           index: i,
-          y: dbBaseY + i * 110,
+          y: dbBaseY + i * NODE_STEP_Y,
         });
       }
     } else {
@@ -239,7 +259,7 @@ export const ArchitectureCanvas: React.FC = () => {
           role: 'shard',
           shardKey: shardRange,
           index: i,
-          y: dbBaseY + (i - 1) * 110,
+          y: dbBaseY + (i - 1) * NODE_STEP_Y,
         });
       }
     }
@@ -248,7 +268,7 @@ export const ArchitectureCanvas: React.FC = () => {
       nodes.push({
         id: dbNode.id,
         type: 'database',
-        position: { x: 1350, y: dbNode.y },
+        position: { x: COL_INFRA, y: dbNode.y },
         data: {
           nodeId: dbNode.id,
           name: dbNode.name,
@@ -260,16 +280,44 @@ export const ArchitectureCanvas: React.FC = () => {
     });
 
     const maxDbY = dbNodeList.reduce((max, n) => Math.max(max, n.y), dbBaseY);
-    const storageY = Math.max(380, maxDbY + 115);
+    const dbEndY = maxDbY + NODE_HEIGHT;
+    const storageY = dbEndY + SECTION_GAP;
 
+    // 5. MinIO S3 Storage (Column 6)
     nodes.push({
       id: 'storage',
       type: 'storage',
-      position: { x: 1350, y: storageY },
+      position: { x: COL_INFRA, y: storageY },
+      data: {},
+    });
+    const storageEndY = storageY + NODE_HEIGHT;
+
+    // 6. Asynchronous Event-Driven Tier (Message Broker in Col 5, Worker Consumers in Col 6)
+    // Strictly positioned below BOTH backend pods and data infrastructure with safety clearance
+    const asyncStartY = Math.max(storageEndY + SECTION_GAP, backendEndY + SECTION_GAP);
+
+    nodes.push({
+      id: 'queue-broker',
+      type: 'queue',
+      position: { x: COL_BACKEND, y: asyncStartY },
       data: {},
     });
 
-    // 2. Build Edges
+    nodes.push({
+      id: 'worker-instance-1',
+      type: 'worker',
+      position: { x: COL_INFRA, y: asyncStartY },
+      data: { workerId: 'worker-instance-1', index: 1, name: 'Event Consumer #1' },
+    });
+
+    nodes.push({
+      id: 'worker-instance-2',
+      type: 'worker',
+      position: { x: COL_INFRA, y: asyncStartY + NODE_STEP_Y },
+      data: { workerId: 'worker-instance-2', index: 2, name: 'Event Consumer #2' },
+    });
+
+    // 7. Build Edges
     const edges: Edge[] = [];
 
     if (cdnEnabled) {
@@ -319,14 +367,12 @@ export const ArchitectureCanvas: React.FC = () => {
           type: 'animated',
         });
       } else if (dbMode === 'read-replicas') {
-        // Connect to primary (writes & reads)
         edges.push({
           id: `e-${rep.id}-database-primary`,
           source: rep.id,
           target: 'database-primary',
           type: 'animated',
         });
-        // Connect to each read replica (read operations)
         for (let i = 1; i <= dbReplicas; i++) {
           edges.push({
             id: `e-${rep.id}-database-replica-${i}`,
@@ -348,6 +394,40 @@ export const ArchitectureCanvas: React.FC = () => {
       }
 
       edges.push({ id: `e-${rep.id}-storage`, source: rep.id, target: 'storage', type: 'animated' });
+
+      // Backend Replicas publish events to Queue Broker
+      edges.push({
+        id: `e-${rep.id}-queue-broker`,
+        source: rep.id,
+        target: 'queue-broker',
+        type: 'animated',
+        style: { strokeDasharray: '3 3', stroke: '#f59e0b' },
+      });
+    });
+
+    // Message Broker to Worker Consumers
+    edges.push({
+      id: 'e-queue-worker-1',
+      source: 'queue-broker',
+      target: 'worker-instance-1',
+      type: 'animated',
+      style: { stroke: '#14b8a6' },
+    });
+    edges.push({
+      id: 'e-queue-worker-2',
+      source: 'queue-broker',
+      target: 'worker-instance-2',
+      type: 'animated',
+      style: { stroke: '#14b8a6' },
+    });
+
+    // Workers persisting processed events to primary database
+    edges.push({
+      id: 'e-worker-1-db',
+      source: 'worker-instance-1',
+      target: 'database-primary',
+      type: 'animated',
+      style: { strokeDasharray: '4 4', stroke: '#10b981' },
     });
 
     // Replication Sync Edges between Primary Leader and Read Replicas
@@ -397,18 +477,23 @@ export const ArchitectureCanvas: React.FC = () => {
   const prevReplicaCountRef = useRef(replicaCount);
   const prevDbSigRef = useRef(`${config?.database?.mode}-${config?.database?.replicasCount}-${config?.database?.shardsCount}`);
   const prevCacheSigRef = useRef(`${config?.redis?.clusterMode}-${config?.redis?.nodesCount}-${config?.redis?.hashingStrategy}`);
+  const prevCdnRef = useRef(cdnEnabled);
 
-  // Sync nodes & edges whenever structural topology updates while preserving measured dimensions & positions
+  // Automatically arrange and reposition nodes whenever scaling occurs
   useEffect(() => {
     const currentDbSig = `${config?.database?.mode}-${config?.database?.replicasCount}-${config?.database?.shardsCount}`;
     const currentCacheSig = `${config?.redis?.clusterMode}-${config?.redis?.nodesCount}-${config?.redis?.hashingStrategy}`;
     const replicaCountChanged = prevReplicaCountRef.current !== replicaCount;
     const dbTopologyChanged = prevDbSigRef.current !== currentDbSig;
     const cacheTopologyChanged = prevCacheSigRef.current !== currentCacheSig;
+    const cdnChanged = prevCdnRef.current !== cdnEnabled;
+
+    const anyTopologyScaled = replicaCountChanged || dbTopologyChanged || cacheTopologyChanged || cdnChanged;
 
     prevReplicaCountRef.current = replicaCount;
     prevDbSigRef.current = currentDbSig;
     prevCacheSigRef.current = currentCacheSig;
+    prevCdnRef.current = cdnEnabled;
 
     setNodes((currentNodes) => {
       const existingMap = new Map(currentNodes.map((n) => [n.id, n]));
@@ -417,26 +502,16 @@ export const ArchitectureCanvas: React.FC = () => {
         if (!existing) {
           return newNode;
         }
-        const isBackendPod = newNode.id.startsWith('backend-instance-');
-        const isInfraTier =
-          newNode.id.startsWith('cache-node-') ||
-          newNode.id.startsWith('database-') ||
-          newNode.id === 'storage';
 
-        const shouldResetPos =
-          (replicaCountChanged && isBackendPod) ||
-          ((dbTopologyChanged || cacheTopologyChanged) && isInfraTier);
-
+        // Apply calculated non-overlapping coordinate positions
         return {
           ...existing,
           ...newNode,
-          // Preserve measured dimensions and internal flags so React Flow never unmounts or hides nodes
           measured: existing.measured,
           width: existing.width,
           height: existing.height,
           selected: existing.selected,
-          // When topology changes, reposition relevant pods/shards smoothly
-          position: shouldResetPos ? newNode.position : (existing.position || newNode.position),
+          position: newNode.position,
           data: {
             ...existing.data,
             ...newNode.data,
@@ -445,9 +520,20 @@ export const ArchitectureCanvas: React.FC = () => {
       });
     });
     setEdges(graphData.edges);
+
+    // If topology scaled, smoothly frame the new arrangement
+    if (anyTopologyScaled) {
+      const timer = setTimeout(() => {
+        fitView({ padding: 0.18, duration: 450 });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
   }, [
     graphData,
     replicaCount,
+    cdnEnabled,
+    redisEnabled,
+    autoscalingEnabled,
     config?.redis?.clusterMode,
     config?.redis?.nodesCount,
     config?.redis?.hashingStrategy,
@@ -456,22 +542,15 @@ export const ArchitectureCanvas: React.FC = () => {
     config?.database?.shardsCount,
     setNodes,
     setEdges,
+    fitView,
   ]);
 
   const handleResetLayout = () => {
-    setNodes((currentNodes) => {
-      const existingMap = new Map(currentNodes.map((n) => [n.id, n]));
-      return graphData.nodes.map((newNode) => {
-        const existing = existingMap.get(newNode.id);
-        return {
-          ...newNode,
-          measured: existing?.measured,
-          width: existing?.width,
-          height: existing?.height,
-        };
-      });
-    });
+    setNodes(graphData.nodes);
     setEdges(graphData.edges);
+    setTimeout(() => {
+      fitView({ padding: 0.18, duration: 450 });
+    }, 50);
   };
 
   return (
@@ -534,5 +613,13 @@ export const ArchitectureCanvas: React.FC = () => {
         </button>
       </div>
     </div>
+  );
+};
+
+export const ArchitectureCanvas: React.FC = () => {
+  return (
+    <ReactFlowProvider>
+      <ArchitectureCanvasContent />
+    </ReactFlowProvider>
   );
 };

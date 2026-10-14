@@ -14,15 +14,17 @@ export const AutoscalerNode: React.FC<{ data?: any }> = ({ data }) => {
     <BaseNode
       id="autoscaler"
       title="Kubernetes HPA"
-      subtitle="Horizontal Pod Autoscaler"
+      subtitle="Horizontal Autoscaler"
       icon={ArrowUpRight}
       iconColor="bg-teal-500 text-teal-600 dark:text-teal-400"
       status={!enabled ? 'idle' : currentCpu > targetCpu ? 'active' : 'healthy'}
+      badgeText={enabled ? 'HPA ACTIVE' : 'MANUAL SCALE'}
+      badgeVariant={enabled ? 'success' : 'default'}
       targetHandle={Position.Top}
       sourceHandle={Position.Bottom}
       metrics={[
-        { label: 'HPA Policy', value: enabled ? 'Active' : 'Disabled' },
-        { label: 'CPU / Target', value: enabled ? `${currentCpu}% / ${targetCpu}%` : 'Off' },
+        { label: 'Current CPU', value: `${currentCpu}%` },
+        { label: 'Target CPU', value: `${targetCpu}%` },
       ]}
     />
   );

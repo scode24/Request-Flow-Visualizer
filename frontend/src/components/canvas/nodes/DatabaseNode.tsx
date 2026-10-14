@@ -22,7 +22,14 @@ export const DatabaseNode: React.FC<DatabaseNodeProps> = ({ data }) => {
 
   const role = nodeMetric?.role || data?.role || 'primary';
   const shardKey = nodeMetric?.shardKey || data?.shardKey;
-  const name = nodeMetric?.name || data?.name || (role === 'shard' ? `DB Shard #${data?.index || 1}` : role === 'replica' ? `Read Replica #${data?.index || 1}` : 'PostgreSQL Primary');
+  const name =
+    nodeMetric?.name ||
+    data?.name ||
+    (role === 'shard'
+      ? `DB Shard #${data?.index || 1}`
+      : role === 'replica'
+      ? `Read Replica #${data?.index || 1}`
+      : 'PostgreSQL Primary');
 
   const queries = nodeMetric?.totalQueries ?? databaseMetrics?.totalQueries ?? 0;
   const conns = nodeMetric?.activeConnections ?? databaseMetrics?.activeConnections ?? 1;
@@ -32,15 +39,21 @@ export const DatabaseNode: React.FC<DatabaseNodeProps> = ({ data }) => {
   let subtitle = 'Relational Storage';
   let icon = Database;
   let iconColor = 'bg-blue-600 text-blue-700 dark:text-blue-300';
+  let badgeText = 'LEADER (R/W)';
+  let badgeVariant: 'success' | 'info' | 'warning' = 'success';
 
   if (role === 'replica') {
     subtitle = 'Read Replica (Async)';
     icon = Copy;
     iconColor = 'bg-sky-500 text-sky-600 dark:text-sky-300';
+    badgeText = 'READ-ONLY (ASYNC)';
+    badgeVariant = 'info';
   } else if (role === 'shard') {
     subtitle = shardKey ? `Shard [${shardKey}]` : 'Horizontal Partition';
     icon = Split;
     iconColor = 'bg-indigo-600 text-indigo-600 dark:text-indigo-300';
+    badgeText = shardKey || 'PARTITION';
+    badgeVariant = 'warning';
   } else if (databaseMetrics?.mode === 'read-replicas') {
     subtitle = 'Primary Leader (RW)';
   }
@@ -55,6 +68,8 @@ export const DatabaseNode: React.FC<DatabaseNodeProps> = ({ data }) => {
       status={status}
       loadPercent={cpuPercent}
       loadLabel="Engine Load"
+      badgeText={badgeText}
+      badgeVariant={badgeVariant}
       targetHandle={Position.Left}
       sourceHandle={role === 'primary' && databaseMetrics?.mode === 'read-replicas' ? Position.Right : false}
       metrics={[
@@ -64,4 +79,3 @@ export const DatabaseNode: React.FC<DatabaseNodeProps> = ({ data }) => {
     />
   );
 };
-

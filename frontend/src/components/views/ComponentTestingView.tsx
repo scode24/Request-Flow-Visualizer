@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Database, HardDrive, Split, Globe, ArrowUpRight, Play, RefreshCw, Trash2, CheckCircle2 } from 'lucide-react';
+import { Zap, Database, HardDrive, Split, Globe, ArrowUpRight, Play, RefreshCw, Trash2, CheckCircle2, Layers, ShieldAlert } from 'lucide-react';
 import { useSystem } from '../../context/SystemContext';
 
-type ComponentTab = 'cache' | 'database' | 'storage' | 'loadbalancer' | 'cdn' | 'autoscaler';
+type ComponentTab = 'cache' | 'database' | 'storage' | 'loadbalancer' | 'cdn' | 'autoscaler' | 'queue' | 'resilience';
 
 export const ComponentTestingView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ComponentTab>('cache');
@@ -124,6 +124,56 @@ export const ComponentTestingView: React.FC = () => {
     }
   };
 
+  // 7. Message Queue Test
+  const runQueueTest = async (op: 'publish' | 'burst' | 'poison' | 'clear') => {
+    setLoading(true);
+    try {
+      let endpoint = '/api/test/queue/publish';
+      let body: any = { payload: { event: 'order.created', amount: 149.99, timestamp: Date.now() } };
+      if (op === 'burst') {
+        endpoint = '/api/test/queue/burst';
+        body = { count: 20 };
+      } else if (op === 'poison') {
+        endpoint = '/api/test/queue/poison-pill';
+        body = {};
+      } else if (op === 'clear') {
+        endpoint = '/api/test/queue/clear';
+        body = {};
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (err: any) {
+      setTestResult({ error: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 8. Resilience Test
+  const runResilienceTest = async (op: 'trip' | 'reset' | 'exhaust' | 'refill') => {
+    setLoading(true);
+    try {
+      let endpoint = '/api/test/resilience/trip-cb';
+      if (op === 'reset') endpoint = '/api/test/resilience/reset-cb';
+      if (op === 'exhaust') endpoint = '/api/test/resilience/exhaust-tokens';
+      if (op === 'refill') endpoint = '/api/test/resilience/refill-tokens';
+
+      const res = await fetch(endpoint, { method: 'POST' });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (err: any) {
+      setTestResult({ error: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden p-6 select-none">
       <div className="max-w-6xl w-full mx-auto flex-1 flex flex-col space-y-5">
@@ -146,6 +196,8 @@ export const ComponentTestingView: React.FC = () => {
             { id: 'loadbalancer', label: 'Load Balancer', icon: Split, color: 'text-purple-500' },
             { id: 'cdn', label: 'CDN Edge Network', icon: Globe, color: 'text-cyan-500' },
             { id: 'autoscaler', label: 'HPA Autoscaler', icon: ArrowUpRight, color: 'text-teal-500' },
+            { id: 'queue', label: 'Message Queue (Kafka)', icon: Layers, color: 'text-amber-500' },
+            { id: 'resilience', label: 'Resilience & Circuit Breaker', icon: ShieldAlert, color: 'text-rose-500' },
           ].map((tab) => {
             const Icon = tab.icon;
             const isSelected = activeTab === tab.id;
@@ -153,13 +205,13 @@ export const ComponentTestingView: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id as ComponentTab); setTestResult(null); }}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-medium transition-all ${
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-medium transition-all text-[11px] whitespace-nowrap ${
                   isSelected
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm border border-slate-200 dark:border-slate-700'
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${tab.color}`} />
+                <Icon className={`w-3.5 h-3.5 ${tab.color}`} />
                 <span>{tab.label}</span>
               </button>
             );
@@ -397,6 +449,106 @@ export const ComponentTestingView: React.FC = () => {
                   >
                     <span>Simulate 20% CPU Idle (Triggers Scale-Down)</span>
                   </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'queue' && (
+              <div className="space-y-4 text-xs">
+                <div>
+                  <h4 className="font-semibold text-slate-800 dark:text-slate-200">Kafka / Message Queue Testing</h4>
+                  <p className="text-slate-500 mt-1">
+                    Simulate asynchronous event publishing, consumer lag accumulation, and Dead Letter Queue (DLQ) poison pills.
+                  </p>
+                </div>
+                <div className="space-y-2.5">
+                  <button
+                    onClick={() => runQueueTest('publish')}
+                    disabled={loading}
+                    className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-medium text-left flex items-center justify-between"
+                  >
+                    <span>Publish Single Event (order.created)</span>
+                    <Play className="w-3.5 h-3.5 text-amber-500" />
+                  </button>
+
+                  <button
+                    onClick={() => runQueueTest('burst')}
+                    disabled={loading}
+                    className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium text-left flex items-center justify-between"
+                  >
+                    <span>Simulate 20-Message Burst (Builds Consumer Lag)</span>
+                    <Layers className="w-3.5 h-3.5 text-white" />
+                  </button>
+
+                  <button
+                    onClick={() => runQueueTest('poison')}
+                    disabled={loading}
+                    className="w-full py-2 px-3 rounded-lg bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-800/80 hover:bg-rose-100 text-rose-700 dark:text-rose-300 font-medium text-left flex items-center justify-between"
+                  >
+                    <span>Inject Poison Pill (Routes to Dead Letter Queue)</span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200">DLQ</span>
+                  </button>
+
+                  <button
+                    onClick={() => runQueueTest('clear')}
+                    disabled={loading}
+                    className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-medium text-left flex items-center justify-between text-slate-500"
+                  >
+                    <span>Purge Queue & Reset Workers</span>
+                    <Trash2 className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'resilience' && (
+              <div className="space-y-4 text-xs">
+                <div>
+                  <h4 className="font-semibold text-slate-800 dark:text-slate-200">Resilience: Rate Limiting & Circuit Breaker</h4>
+                  <p className="text-slate-500 mt-1">
+                    Test fail-fast circuit breaker tripping and API Gateway token bucket exhaustion.
+                  </p>
+                </div>
+                <div className="space-y-2.5">
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 block">Circuit Breaker Controls</span>
+                    <button
+                      onClick={() => runResilienceTest('trip')}
+                      disabled={loading}
+                      className="w-full py-2 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium flex items-center justify-between"
+                    >
+                      <span>Trip Circuit Breaker to OPEN (Fail Fast)</span>
+                      <ShieldAlert className="w-3.5 h-3.5 text-white" />
+                    </button>
+                    <button
+                      onClick={() => runResilienceTest('reset')}
+                      disabled={loading}
+                      className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center justify-between"
+                    >
+                      <span>Reset Circuit Breaker to CLOSED</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 block">Rate Limiter (Token Bucket)</span>
+                    <button
+                      onClick={() => runResilienceTest('exhaust')}
+                      disabled={loading}
+                      className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium flex items-center justify-between"
+                    >
+                      <span>Exhaust Tokens to 0 (Trigger HTTP 429)</span>
+                      <span className="text-[10px] font-mono font-bold">429 DROP</span>
+                    </button>
+                    <button
+                      onClick={() => runResilienceTest('refill')}
+                      disabled={loading}
+                      className="w-full py-2 px-3 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 font-medium flex items-center justify-between"
+                    >
+                      <span>Refill Token Bucket (100% Capacity)</span>
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

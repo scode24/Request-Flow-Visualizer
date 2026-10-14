@@ -1,9 +1,31 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSystem } from '../../context/SystemContext';
-import { AlertTriangle, Sparkles, X, ArrowUpRight, Cpu, Server, Zap, Check } from 'lucide-react';
+import { AlertTriangle, Sparkles, X, ArrowUpRight, Cpu, Server, Zap, Check, Clock } from 'lucide-react';
+
+const AUTO_CLOSE_MS = 4500;
 
 export const ScalingAdvisoryBanner: React.FC = () => {
   const { activeAdvisory, dismissAdvisory, updateConfig, config } = useSystem();
+  const [progress, setProgress] = useState<number>(100);
+
+  // Automatically close the popup after 4.5 seconds
+  useEffect(() => {
+    if (!activeAdvisory) return;
+
+    setProgress(100);
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, 100 - (elapsed / AUTO_CLOSE_MS) * 100);
+      setProgress(remaining);
+      if (elapsed >= AUTO_CLOSE_MS) {
+        clearInterval(interval);
+        dismissAdvisory();
+      }
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [activeAdvisory, dismissAdvisory]);
 
   if (!activeAdvisory) return null;
 
@@ -64,7 +86,7 @@ export const ScalingAdvisoryBanner: React.FC = () => {
   return (
     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 max-w-xl w-[92%] animate-in fade-in slide-in-from-top-4 duration-300 font-sans select-none">
       <div
-        className={`rounded-2xl p-4 shadow-2xl backdrop-blur-md border ${
+        className={`rounded-2xl p-4 shadow-2xl backdrop-blur-md border overflow-hidden relative ${
           isWarning
             ? 'bg-amber-50/95 dark:bg-amber-950/90 border-amber-300 dark:border-amber-700/80 text-amber-950 dark:text-amber-100 shadow-amber-500/10'
             : 'bg-indigo-50/95 dark:bg-slate-900/95 border-indigo-200 dark:border-indigo-800 text-slate-900 dark:text-slate-100 shadow-indigo-500/10'
@@ -73,7 +95,7 @@ export const ScalingAdvisoryBanner: React.FC = () => {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div
-              className={`p-2 rounded-xl flex items-center justify-center ${
+              className={`p-2 rounded-xl flex items-center justify-center shrink-0 ${
                 isWarning
                   ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
                   : 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400'
@@ -106,12 +128,19 @@ export const ScalingAdvisoryBanner: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={dismissAdvisory}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[10px] font-mono text-slate-400 flex items-center gap-0.5">
+              <Clock className="w-3 h-3 text-slate-400" />
+              Auto-close
+            </span>
+            <button
+              onClick={dismissAdvisory}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              title="Close now"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Actionable Suggestions for Non-Scaling / Advisory Scenario */}
@@ -133,7 +162,7 @@ export const ScalingAdvisoryBanner: React.FC = () => {
 
               <button
                 onClick={handleScaleCache}
-                className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium flex items-center gap-1 shadow-sm transition-colors text-[11px]"
+                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium flex items-center gap-1 shadow-sm transition-colors text-[11px]"
               >
                 <Zap className="w-3.5 h-3.5" />
                 <span>Cluster Redis (Consistent Hash)</span>
@@ -178,6 +207,16 @@ export const ScalingAdvisoryBanner: React.FC = () => {
             </button>
           </div>
         )}
+
+        {/* Animated Auto-Closing Progress Bar */}
+        <div className="w-full bg-black/5 dark:bg-white/10 h-1 rounded-full mt-3 overflow-hidden">
+          <div
+            className={`h-full transition-all duration-75 ${
+              isWarning ? 'bg-amber-500' : 'bg-indigo-500'
+            }`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
     </div>
   );

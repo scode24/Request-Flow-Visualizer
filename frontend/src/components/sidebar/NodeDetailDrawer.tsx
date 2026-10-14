@@ -12,6 +12,8 @@ export const NodeDetailDrawer: React.FC = () => {
     cdnMetrics,
     loadBalancerMetrics,
     autoscalerMetrics,
+    queueMetrics,
+    resilienceMetrics,
     config,
   } = useSystem();
 
@@ -248,6 +250,99 @@ export const NodeDetailDrawer: React.FC = () => {
                 <div>
                   <span className="text-[10px] text-slate-500 block">Current Avg CPU</span>
                   <span>{autoscalerMetrics?.currentCpuPercent}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Message Broker (Kafka) Details */}
+        {selectedNodeId === 'queue-broker' && (
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 space-y-2">
+              <span className="font-semibold text-amber-900 dark:text-amber-200">Kafka / Message Broker Telemetry</span>
+              <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Topic</span>
+                  <span className="truncate block">{queueMetrics?.topic || 'events.stream'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Partitions</span>
+                  <span>{queueMetrics?.partitions || 3} Partitions</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Queue Depth</span>
+                  <span>{queueMetrics?.queueDepth || 0} msgs</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Consumer Lag</span>
+                  <span className="text-amber-600 font-bold">{queueMetrics?.consumerLag || 0} msgs</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Published</span>
+                  <span>{queueMetrics?.totalPublished || 0} total</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Dead Letter Queue</span>
+                  <span className={(queueMetrics?.deadLetterQueueCount || 0) > 0 ? 'text-rose-500 font-bold' : ''}>
+                    {queueMetrics?.deadLetterQueueCount || 0} poison msgs
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Worker Instance Details */}
+        {selectedNodeId?.startsWith('worker-instance') && (
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-teal-50/50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-900/50 space-y-2">
+              <span className="font-semibold text-teal-900 dark:text-teal-200">Async Event Consumer Worker</span>
+              <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Worker ID</span>
+                  <span>{selectedNodeId}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Status</span>
+                  <span className="text-emerald-500 font-bold">Active Consumer</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Source Topic</span>
+                  <span>{queueMetrics?.topic || 'events.stream'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Sink Destination</span>
+                  <span>PostgreSQL (Async)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* API Gateway Resilience Details */}
+        {selectedNodeId === 'gateway' && (
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/50 space-y-2">
+              <span className="font-semibold text-purple-900 dark:text-purple-200">API Gateway & Rate Limiter</span>
+              <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Limiter Algorithm</span>
+                  <span>Token Bucket</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Available Tokens</span>
+                  <span className="text-purple-600 font-bold">{resilienceMetrics?.rateLimiter?.tokensAvailable ?? 100} / 100</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Refill Rate</span>
+                  <span>20 tokens/sec</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block">Throttled (429)</span>
+                  <span className={(resilienceMetrics?.rateLimiter?.totalThrottled || 0) > 0 ? 'text-rose-500 font-bold' : ''}>
+                    {resilienceMetrics?.rateLimiter?.totalThrottled || 0} reqs
+                  </span>
                 </div>
               </div>
             </div>

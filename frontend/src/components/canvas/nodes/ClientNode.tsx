@@ -13,15 +13,17 @@ export const ClientNode: React.FC<{ data?: any }> = ({ data }) => {
   return (
     <BaseNode
       id="client"
-      title="Client / Frontend"
+      title="Client / User"
       subtitle="HTTP/2 Browser"
       icon={Monitor}
       iconColor="bg-sky-500 text-sky-600 dark:text-sky-400"
       status={isRunning ? 'active' : 'idle'}
+      badgeText={isRunning ? `${activeWorkers} VU LOAD` : 'IDLE TRAFFIC'}
+      badgeVariant={isRunning ? 'success' : 'default'}
       targetHandle={false}
       sourceHandle={Position.Right}
       metrics={[
-        { label: 'Active Users', value: isRunning ? `${activeWorkers} VU` : 'Idle' },
+        { label: 'Virtual Users', value: isRunning ? `${activeWorkers} VU` : '0 VU' },
         { label: 'Live RPS', value: `${currentRps} req/s` },
       ]}
     />

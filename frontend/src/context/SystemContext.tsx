@@ -12,6 +12,10 @@ import {
   LoadTestConfig,
   SystemConfig,
   ScalingAdvisoryEvent,
+  QueueMetrics,
+  ResilienceMetrics,
+  Review,
+  ReviewStats,
 } from '../types';
 
 interface SystemContextType {
@@ -23,6 +27,10 @@ interface SystemContextType {
   cdnMetrics: CdnMetrics;
   loadBalancerMetrics: LoadBalancerMetrics;
   autoscalerMetrics: AutoscalerMetrics;
+  queueMetrics: QueueMetrics | null;
+  resilienceMetrics: ResilienceMetrics | null;
+  reviews: Review[];
+  reviewStats: ReviewStats | null;
   loadTestStatus: LoadTestStatus | null;
   recentTraces: TraceSummary[];
   selectedTrace: TraceSummary | null;
@@ -39,6 +47,16 @@ interface SystemContextType {
   updateConfig: (updates: any) => Promise<void>;
   refreshTraces: () => Promise<void>;
   clearTraces: () => void;
+  submitReview: (reviewData: {
+    author_name: string;
+    author_email: string;
+    rating: number;
+    category: string;
+    title: string;
+    comment: string;
+  }) => Promise<boolean>;
+  deleteReview: (id: number) => Promise<boolean>;
+  refreshReviews: () => Promise<void>;
 }
 
 const defaultInitialConfig: SystemConfig = {
@@ -185,6 +203,10 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [cdnMetrics, setCdnMetrics] = useState<CdnMetrics>(defaultInitialCdnMetrics);
   const [loadBalancerMetrics, setLoadBalancerMetrics] = useState<LoadBalancerMetrics>(defaultInitialLbMetrics);
   const [autoscalerMetrics, setAutoscalerMetrics] = useState<AutoscalerMetrics>(defaultInitialAutoscalerMetrics);
+  const [queueMetrics, setQueueMetrics] = useState<QueueMetrics | null>(null);
+  const [resilienceMetrics, setResilienceMetrics] = useState<ResilienceMetrics | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [loadTestStatus, setLoadTestStatus] = useState<LoadTestStatus | null>(null);
   const [recentTraces, setRecentTraces] = useState<TraceSummary[]>([]);
   const [selectedTrace, setSelectedTrace] = useState<TraceSummary | null>(null);
@@ -304,6 +326,14 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const t = await tracesRes.json();
         setRecentTraces(t.traces || []);
       }
+
+      // Fetch persistent system reviews
+      const reviewsRes = await fetch('/api/reviews');
+      if (reviewsRes.ok) {
+        const r = await reviewsRes.json();
+        if (r.data?.reviews) setReviews(r.data.reviews);
+        if (r.data?.stats) setReviewStats(r.data.stats);
+      }
     } catch (err) {
       console.warn('Backend not yet reachable on initial load:', err);
     }
@@ -356,6 +386,8 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               }
               if (d.autoscaler) setAutoscalerMetrics(d.autoscaler);
               if (d.loadTest) setLoadTestStatus(d.loadTest);
+              if (d.queue) setQueueMetrics(d.queue);
+              if (d.resilience) setResilienceMetrics(d.resilience);
               break;
             }
             case 'trace_event': {
@@ -410,11 +442,34 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   }
                   return { ...prev, instances: newInstances };
                 });
+
+                // Trigger scaling popup notification that automatically closes
+                setActiveAdvisory({
+                  type: 'scaling_advisory',
+                  level: 'warning',
+                  title: `Cluster Scaling Triggered: ${msg.event.fromReplicas} → ${msg.event.newReplicas} Pods`,
+                  message: msg.event.reason || `Horizontal Pod Autoscaler dynamically scaled backend pods from ${msg.event.fromReplicas} to ${msg.event.newReplicas}.`,
+                  timestamp: Date.now(),
+                  previousReplicas: msg.event.fromReplicas,
+                  targetReplicas: msg.event.newReplicas,
+                });
               }
               break;
             }
             case 'scaling_advisory': {
               setActiveAdvisory(msg);
+              break;
+            }
+            case 'new_review': {
+              if (msg.review) {
+                setReviews((prev) => [msg.review, ...prev.filter((r) => r.id !== msg.review.id)]);
+              }
+              break;
+            }
+            case 'delete_review': {
+              if (msg.reviewId) {
+                setReviews((prev) => prev.filter((r) => r.id !== msg.reviewId));
+              }
               break;
             }
             case 'config_updated': {
@@ -630,6 +685,36 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAutoscalerMetrics((prev) => ({ ...prev, enabled: isHpa }));
     }
 
+    // Trigger auto-closing scaling notification when scaling parameters change
+    if (
+      updates.backend?.activeReplicas !== undefined ||
+      updates.redis?.nodesCount !== undefined ||
+      updates.redis?.clusterMode === 'cluster' ||
+      updates.database?.mode === 'read-replicas' ||
+      updates.database?.mode === 'sharded' ||
+      updates.database?.replicasCount !== undefined ||
+      updates.database?.shardsCount !== undefined
+    ) {
+      const details = updates.backend?.activeReplicas
+        ? `Backend scaled to ${updates.backend.activeReplicas} pods.`
+        : updates.redis?.clusterMode === 'cluster'
+        ? `Redis scaled to ${updates.redis.nodesCount || 3} cluster nodes.`
+        : updates.database?.mode === 'read-replicas'
+        ? `Database scaled to ${updates.database.replicasCount || 2} read replicas.`
+        : updates.database?.mode === 'sharded'
+        ? `Database partitioned into ${updates.database.shardsCount || 2} shards.`
+        : 'Topology scaling rebalanced.';
+
+      setActiveAdvisory({
+        type: 'scaling_advisory',
+        level: 'warning',
+        title: 'Scaling Triggered',
+        message: `${details} Canvas layout dynamically arranged.`,
+        timestamp: Date.now(),
+        targetReplicas: updates.backend?.activeReplicas,
+      });
+    }
+
     // 2. Transmit to backend API and sync server-confirmed state
     try {
       const res = await fetch('/api/config', {
@@ -666,6 +751,63 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSelectedTrace(null);
   };
 
+  const refreshReviews = async () => {
+    try {
+      const res = await fetch('/api/reviews');
+      if (res.ok) {
+        const d = await res.json();
+        if (d.data?.reviews) setReviews(d.data.reviews);
+        if (d.data?.stats) setReviewStats(d.data.stats);
+      }
+    } catch (err) {
+      console.error('Failed to refresh reviews:', err);
+    }
+  };
+
+  const submitReview = async (reviewData: {
+    author_name: string;
+    author_email: string;
+    rating: number;
+    category: string;
+    title: string;
+    comment: string;
+  }): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reviewData),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.data) {
+          setReviews((prev) => [d.data, ...prev.filter((r) => r.id !== d.data.id)]);
+        }
+        await refreshReviews();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to submit review:', err);
+      return false;
+    }
+  };
+
+  const deleteReview = async (id: number): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setReviews((prev) => prev.filter((r) => r.id !== id));
+        await refreshReviews();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to delete review:', err);
+      return false;
+    }
+  };
+
   return (
     <SystemContext.Provider
       value={{
@@ -678,6 +820,10 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         loadBalancerMetrics,
         autoscalerMetrics,
         loadTestStatus,
+        queueMetrics,
+        resilienceMetrics,
+        reviews,
+        reviewStats,
         recentTraces,
         selectedTrace,
         selectedNodeId,
@@ -693,6 +839,9 @@ export const SystemProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         updateConfig,
         refreshTraces,
         clearTraces,
+        submitReview,
+        deleteReview,
+        refreshReviews,
       }}
     >
       {children}

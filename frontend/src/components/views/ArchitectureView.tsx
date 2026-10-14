@@ -1,7 +1,7 @@
 import React from 'react';
 import { LoadControlPanel } from '../sidebar/LoadControlPanel';
 import { ArchitectureCanvas } from '../canvas/ArchitectureCanvas';
-import { LiveLoadMatrixHUD } from '../canvas/LiveLoadMatrixHUD';
+import { LiveLoadMatrixPanel } from '../canvas/LiveLoadMatrixPanel';
 import { ScalingAdvisoryBanner } from '../canvas/ScalingAdvisoryBanner';
 import { NodeDetailDrawer } from '../sidebar/NodeDetailDrawer';
 import { ObservabilityDrawer } from '../bottompanel/ObservabilityDrawer';
@@ -14,15 +14,16 @@ export const ArchitectureView: React.FC = () => {
         <LoadControlPanel />
 
         {/* Central Architecture React Flow Canvas */}
-        <div className="flex-1 relative h-full">
+        <div className="flex-1 relative h-full min-w-0">
           <ArchitectureCanvas />
           {/* Pre-scaling Notification & Non-scaling Optimization Advisory */}
           <ScalingAdvisoryBanner />
-          {/* Live Load Matrix Overlay (Main Screen Fixed HUD) */}
-          <LiveLoadMatrixHUD />
           {/* Node Diagnostics Drawer */}
           <NodeDetailDrawer />
         </div>
+
+        {/* Right Dedicated Load Matrix Panel (Unobstructed view of all canvas nodes) */}
+        <LiveLoadMatrixPanel />
       </div>
 
       {/* Bottom Collapsible Observability Panel */}

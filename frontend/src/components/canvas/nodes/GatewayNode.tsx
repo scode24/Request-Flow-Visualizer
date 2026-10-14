@@ -5,7 +5,12 @@ import { BaseNode } from './BaseNode';
 import { useSystem } from '../../../context/SystemContext';
 
 export const GatewayNode: React.FC = () => {
-  const { loadTestStatus } = useSystem();
+  const { resilienceMetrics } = useSystem();
+  const rl = resilienceMetrics?.rateLimiter;
+
+  const tokens = rl ? rl.tokensAvailable : 100;
+  const capacity = rl ? rl.capacity : 100;
+  const isThrottling = rl ? rl.isThrottling : false;
 
   return (
     <BaseNode
@@ -14,12 +19,16 @@ export const GatewayNode: React.FC = () => {
       subtitle="Kong / Ingress"
       icon={Network}
       iconColor="bg-purple-500 text-purple-600 dark:text-purple-400"
-      status="healthy"
+      status={isThrottling ? 'degraded' : 'healthy'}
+      loadPercent={Math.max(0, 100 - (tokens / capacity) * 100)}
+      loadLabel="Bucket Used"
+      badgeText={isThrottling ? '429 THROTTLED' : 'TOKEN BUCKET'}
+      badgeVariant={isThrottling ? 'danger' : 'info'}
       targetHandle={Position.Left}
       sourceHandle={Position.Right}
       metrics={[
-        { label: 'Rate Limiter', value: '1,000 req/m' },
-        { label: 'Latency', value: '~1.5 ms' },
+        { label: 'Token Bucket', value: `${tokens} / ${capacity}` },
+        { label: 'Throttled', value: `${rl?.totalThrottled || 0} reqs` },
       ]}
     />
   );

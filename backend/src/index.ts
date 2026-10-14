@@ -8,6 +8,7 @@ import loadtestRoutes from './routes/loadtest';
 import componentRoutes from './routes/components';
 import configRoutes from './routes/config';
 import metricsRoutes from './routes/metrics';
+import reviewsRoutes from './routes/reviews';
 import { databaseService } from './services/database';
 import { cacheService } from './services/cache';
 import { storageService } from './services/storage';
@@ -15,6 +16,8 @@ import { loadBalancerService } from './services/loadbalancer';
 import { cdnService } from './services/cdn';
 import { autoscalerService } from './services/autoscaler';
 import { loadGeneratorService } from './services/loadgenerator';
+import { queueService } from './services/queue';
+import { resilienceService } from './services/resilience';
 
 const app = express();
 const server = http.createServer(app);
@@ -28,6 +31,7 @@ initWebSocketServer(server);
 
 // Routes
 app.use('/api', apiRoutes);
+app.use('/api/reviews', reviewsRoutes);
 app.use('/api/load-test', loadtestRoutes);
 app.use('/api/test', componentRoutes);
 app.use('/api/config', configRoutes);
@@ -47,6 +51,8 @@ setInterval(() => {
         loadBalancer: loadBalancerService.getMetrics(),
         autoscaler: autoscalerService.getMetrics(),
         loadTest: loadGeneratorService.getStatus(),
+        queue: queueService.getMetrics(),
+        resilience: resilienceService.getMetrics(),
       },
     });
   }

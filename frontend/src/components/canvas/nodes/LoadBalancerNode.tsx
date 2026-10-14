@@ -15,16 +15,18 @@ export const LoadBalancerNode: React.FC<{ data?: any }> = ({ data }) => {
     <BaseNode
       id="loadbalancer"
       title="Load Balancer"
-      subtitle={`NGINX (${algo})`}
+      subtitle="NGINX Ingress"
       icon={Split}
       iconColor="bg-blue-500 text-blue-600 dark:text-blue-400"
       status={activeConns > 20 ? 'degraded' : 'healthy'}
       loadPercent={Math.min(100, Math.max(5, activeConns * 3))}
-      loadLabel="Ingress Load"
+      loadLabel="Ingress Traffic"
+      badgeText={algo.toUpperCase()}
+      badgeVariant="info"
       targetHandle={Position.Left}
       sourceHandle={Position.Right}
       metrics={[
-        { label: 'LB Replicas', value: `${replicasCount} Pod(s)` },
+        { label: 'Replicas', value: `${replicasCount} Pods` },
         { label: 'Active Conns', value: activeConns },
       ]}
     />

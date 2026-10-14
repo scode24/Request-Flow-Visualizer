@@ -1,9 +1,9 @@
 import React from 'react';
-import { Sun, Moon, Wifi, WifiOff, Workflow, Terminal, Wrench, Sliders } from 'lucide-react';
+import { Sun, Moon, Wifi, WifiOff, Workflow, Terminal, Wrench, Sliders, MessageSquareQuote } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useSystem } from '../../context/SystemContext';
 
-export type ActiveView = 'architecture' | 'testing' | 'api-console' | 'config';
+export type ActiveView = 'architecture' | 'testing' | 'api-console' | 'config' | 'reviews';
 
 interface NavbarProps {
   activeView: ActiveView;
@@ -12,7 +12,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ activeView, setActiveView }) => {
   const { theme, toggleTheme } = useTheme();
-  const { wsConnected, config } = useSystem();
+  const { wsConnected, config, reviews } = useSystem();
 
   return (
     <header className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-4 flex items-center justify-between shrink-0 select-none z-30">
@@ -27,7 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, setActiveView }) => 
               Request Flow Visualizer
             </h1>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold border border-emerald-200 dark:border-emerald-800/60">
-              v2.4
+              v2.5
             </span>
           </div>
           <span className="text-[11px] text-slate-400 block -mt-0.5">
@@ -84,6 +84,23 @@ export const Navbar: React.FC<NavbarProps> = ({ activeView, setActiveView }) => 
         >
           <Sliders className="w-3.5 h-3.5" />
           <span>Config</span>
+        </button>
+
+        <button
+          onClick={() => setActiveView('reviews')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
+            activeView === 'reviews'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <MessageSquareQuote className="w-3.5 h-3.5" />
+          <span>Reviews & Feedback</span>
+          {reviews && reviews.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold font-mono">
+              {reviews.length}
+            </span>
+          )}
         </button>
       </nav>
 

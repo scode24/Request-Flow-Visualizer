@@ -5,6 +5,8 @@ import { storageService } from '../services/storage';
 import { loadBalancerService } from '../services/loadbalancer';
 import { cdnService } from '../services/cdn';
 import { autoscalerService } from '../services/autoscaler';
+import { queueService } from '../services/queue';
+import { resilienceService } from '../services/resilience';
 import { config } from '../config';
 
 const router = Router();
@@ -244,6 +246,112 @@ router.post('/autoscaler/simulate-spike', (req: Request, res: Response) => {
     res.json({
       message: `Simulated CPU spike to ${targetCpu}%. Observe HPA evaluation within 2-4 seconds.`,
       autoscalerMetrics: autoscalerService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 7. Message Queue Testing (Kafka / RabbitMQ)
+// ==========================================
+router.post('/queue/publish', (req: Request, res: Response) => {
+  try {
+    const payload = req.body.payload || { event: 'user.signup', email: 'test@example.com', timestamp: Date.now() };
+    const msg = queueService.publishMessage(payload);
+    res.json({
+      message: 'Event published to queue',
+      event: msg,
+      metrics: queueService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/queue/burst', (req: Request, res: Response) => {
+  try {
+    const count = parseInt(req.body.count || '20', 10);
+    const result = queueService.simulateBurst(count);
+    res.json({
+      message: `Simulated burst of ${result.published} messages. Watch worker lag burn down!`,
+      metrics: queueService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/queue/poison-pill', (req: Request, res: Response) => {
+  try {
+    const msg = queueService.injectPoisonPill();
+    res.json({
+      message: 'Injected malformed poison pill message! Observe Dead Letter Queue (DLQ) capture.',
+      event: msg,
+      metrics: queueService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/queue/clear', (req: Request, res: Response) => {
+  try {
+    queueService.clear();
+    res.json({
+      message: 'Message queue and Dead Letter Queue cleared',
+      metrics: queueService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 8. Resilience Testing (Rate Limiter & Circuit Breaker)
+// ==========================================
+router.post('/resilience/trip-cb', (req: Request, res: Response) => {
+  try {
+    resilienceService.tripCircuitBreaker();
+    res.json({
+      message: 'Circuit breaker forcefully TRIPPED to OPEN! Downstream calls will fail fast with fallback.',
+      metrics: resilienceService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/resilience/reset-cb', (req: Request, res: Response) => {
+  try {
+    resilienceService.resetCircuitBreaker();
+    res.json({
+      message: 'Circuit breaker reset to CLOSED state',
+      metrics: resilienceService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/resilience/exhaust-tokens', (req: Request, res: Response) => {
+  try {
+    resilienceService.exhaustTokens();
+    res.json({
+      message: 'Rate limiter tokens depleted to 0. Next incoming requests will be rejected with HTTP 429 Too Many Requests.',
+      metrics: resilienceService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/resilience/refill-tokens', (req: Request, res: Response) => {
+  try {
+    resilienceService.refillTokens();
+    res.json({
+      message: 'Rate limiter token bucket refilled to 100% capacity',
+      metrics: resilienceService.getMetrics(),
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

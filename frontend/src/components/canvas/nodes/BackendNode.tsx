@@ -5,12 +5,20 @@ import { BaseNode } from './BaseNode';
 import { useSystem } from '../../../context/SystemContext';
 
 export const BackendNode: React.FC<{ data: { instanceId: string; index: number; name?: string; instance?: any; cpu?: number; connections?: number; status?: any } }> = ({ data }) => {
-  const { loadBalancerMetrics } = useSystem();
+  const { loadBalancerMetrics, resilienceMetrics } = useSystem();
   const inst = loadBalancerMetrics?.instances?.find((i) => i.id === data.instanceId) || data.instance;
 
   const cpu = inst?.cpuPercent ?? (data.cpu || 15);
   const conns = inst?.activeConnections ?? (data.connections || 0);
-  const status = inst?.status || (cpu > 85 ? 'degraded' : conns > 0 ? 'active' : 'healthy');
+
+  const cb = resilienceMetrics?.circuitBreaker;
+  const cbState = cb?.state || 'CLOSED';
+
+  const isDegraded = cpu > 85 || cbState === 'OPEN';
+  const status = isDegraded ? 'degraded' : conns > 0 ? 'active' : 'healthy';
+
+  const cbBadgeText = cbState === 'OPEN' ? 'CB: OPEN (FALLBACK)' : cbState === 'HALF_OPEN' ? 'CB: HALF-OPEN' : 'CB: CLOSED';
+  const cbBadgeVariant = cbState === 'OPEN' ? 'danger' : cbState === 'HALF_OPEN' ? 'warning' : 'success';
 
   return (
     <BaseNode
@@ -22,11 +30,13 @@ export const BackendNode: React.FC<{ data: { instanceId: string; index: number; 
       status={status}
       loadPercent={cpu}
       loadLabel="Pod CPU"
+      badgeText={cbBadgeText}
+      badgeVariant={cbBadgeVariant}
       targetHandle={Position.Left}
       sourceHandle={Position.Right}
       metrics={[
         { label: 'CPU Usage', value: `${cpu}%` },
-        { label: 'Active Conns', value: conns },
+        { label: 'Connections', value: conns },
       ]}
     />
   );

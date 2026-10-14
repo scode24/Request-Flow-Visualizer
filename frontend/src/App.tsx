@@ -6,6 +6,7 @@ import { ArchitectureView } from './components/views/ArchitectureView';
 import { ComponentTestingView } from './components/views/ComponentTestingView';
 import { ApiConsoleView } from './components/views/ApiConsoleView';
 import { ConfigManagementView } from './components/views/ConfigManagementView';
+import { ReviewsView } from './components/views/ReviewsView';
 
 export const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('architecture');
@@ -21,6 +22,7 @@ export const AppContent: React.FC = () => {
         {activeView === 'testing' && <ComponentTestingView />}
         {activeView === 'api-console' && <ApiConsoleView />}
         {activeView === 'config' && <ConfigManagementView />}
+        {activeView === 'reviews' && <ReviewsView />}
       </main>
     </div>
   );

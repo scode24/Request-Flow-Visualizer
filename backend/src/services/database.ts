@@ -11,6 +11,17 @@ export interface Product {
   created_at: string;
 }
 
+export interface Review {
+  id: number;
+  author_name: string;
+  author_email: string;
+  rating: number;
+  category: string;
+  title: string;
+  comment: string;
+  created_at: string;
+}
+
 export interface DatabaseNodeMetric {
   id: string;
   name: string;
@@ -60,6 +71,40 @@ class DatabaseService {
     { id: 3, name: 'Edge Gateway Micro', description: 'DIN-rail industrial IoT protocol gateway', price: 349.00, stock: 120, category: 'Edge Computing', created_at: new Date().toISOString() },
     { id: 4, name: 'Optic SFP28 Transceiver', description: '25G optical transceiver module 850nm', price: 89.99, stock: 350, category: 'Optics', created_at: new Date().toISOString() },
     { id: 5, name: 'Server Chassis 2U', description: 'Dual Xeon scalable rack chassis with 12 hot-swap bays', price: 850.00, stock: 12, category: 'Servers', created_at: new Date().toISOString() },
+  ];
+
+  // In-memory review comments store pre-seeded with architecture reviews
+  private mockReviews: Review[] = [
+    {
+      id: 1,
+      author_name: 'Alex Rivera',
+      author_email: 'alex.rivera@sysarch.dev',
+      rating: 5,
+      category: 'System Design Concepts',
+      title: 'Incredible visual intuition for distributed systems!',
+      comment: 'The consistent hashing ring combined with horizontal pod autoscaling helped me understand partitioning and elasticity much better than static diagrams.',
+      created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+    },
+    {
+      id: 2,
+      author_name: 'Sophia Chen',
+      author_email: 'sophia.c@cloudeng.io',
+      rating: 5,
+      category: 'Architecture Topology',
+      title: 'Database read/write replication split is spot on',
+      comment: 'Routing read queries across async replicas while preserving writes to the primary is a classic interview concept that is clearly visualized here.',
+      created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
+    },
+    {
+      id: 3,
+      author_name: 'Marcus Brody',
+      author_email: 'm.brody@scaleup.tech',
+      rating: 4,
+      category: 'Resilience & Load Testing',
+      title: 'Load generator metrics are super responsive',
+      comment: 'Being able to ramp up 50 virtual users and observe p95 and p99 latency percentiles change as cache hit ratio drops provides immediate feedback.',
+      created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    },
   ];
 
   constructor() {
@@ -275,7 +320,20 @@ class DatabaseService {
       );
     `);
 
-    // Check if table is empty, if so, seed
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS system_reviews (
+        id SERIAL PRIMARY KEY,
+        author_name VARCHAR(120) NOT NULL,
+        author_email VARCHAR(255) NOT NULL,
+        rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+        category VARCHAR(100) NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        comment TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Check if products table is empty, if so, seed
     const res = await client.query('SELECT COUNT(*) FROM products');
     if (parseInt(res.rows[0].count, 10) === 0) {
       for (const p of this.mockProducts) {
@@ -285,6 +343,18 @@ class DatabaseService {
         );
       }
       console.log('🌱 [PostgreSQL] Seeded initial sample products table');
+    }
+
+    // Check if reviews table is empty, if so, seed
+    const reviewRes = await client.query('SELECT COUNT(*) FROM system_reviews');
+    if (parseInt(reviewRes.rows[0].count, 10) === 0) {
+      for (const r of this.mockReviews) {
+        await client.query(
+          'INSERT INTO system_reviews (author_name, author_email, rating, category, title, comment) VALUES ($1, $2, $3, $4, $5, $6)',
+          [r.author_name, r.author_email, r.rating, r.category, r.title, r.comment]
+        );
+      }
+      console.log('🌱 [PostgreSQL] Seeded initial sample system reviews table');
     }
   }
 
@@ -433,6 +503,88 @@ class DatabaseService {
     const duration = Date.now() - start;
     this.recordDuration(duration);
     return { success: true, durationMs: duration };
+  }
+
+  public async getReviews(): Promise<Review[]> {
+    this.totalQueries++;
+    if (this.isConnected && this.pool) {
+      try {
+        const res = await this.pool.query('SELECT * FROM system_reviews ORDER BY created_at DESC');
+        return res.rows as Review[];
+      } catch (err) {
+        console.error('[PostgreSQL] Failed to fetch reviews, using mock store:', err);
+      }
+    }
+    return [...this.mockReviews].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  public async addReview(reviewData: {
+    author_name: string;
+    author_email: string;
+    rating: number;
+    category: string;
+    title: string;
+    comment: string;
+  }): Promise<Review> {
+    const start = Date.now();
+    this.totalQueries++;
+
+    if (this.isConnected && this.pool) {
+      try {
+        const res = await this.pool.query(
+          `INSERT INTO system_reviews (author_name, author_email, rating, category, title, comment)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING *`,
+          [
+            reviewData.author_name,
+            reviewData.author_email,
+            Math.max(1, Math.min(5, reviewData.rating)),
+            reviewData.category || 'General',
+            reviewData.title,
+            reviewData.comment,
+          ]
+        );
+        const duration = Date.now() - start;
+        this.recordDuration(duration);
+        return res.rows[0] as Review;
+      } catch (err) {
+        console.error('[PostgreSQL] Failed to insert review, falling back to mock store:', err);
+      }
+    }
+
+    const newId = this.mockReviews.length ? Math.max(...this.mockReviews.map((r) => r.id)) + 1 : 1;
+    const newReview: Review = {
+      id: newId,
+      author_name: reviewData.author_name,
+      author_email: reviewData.author_email,
+      rating: Math.max(1, Math.min(5, reviewData.rating)),
+      category: reviewData.category || 'General',
+      title: reviewData.title,
+      comment: reviewData.comment,
+      created_at: new Date().toISOString(),
+    };
+    this.mockReviews.unshift(newReview);
+    const duration = Date.now() - start;
+    this.recordDuration(duration);
+    return newReview;
+  }
+
+  public async deleteReview(id: number): Promise<boolean> {
+    this.totalQueries++;
+    if (this.isConnected && this.pool) {
+      try {
+        await this.pool.query('DELETE FROM system_reviews WHERE id = $1', [id]);
+        return true;
+      } catch (err) {
+        console.error('[PostgreSQL] Failed to delete review:', err);
+      }
+    }
+    const idx = this.mockReviews.findIndex((r) => r.id === id);
+    if (idx !== -1) {
+      this.mockReviews.splice(idx, 1);
+      return true;
+    }
+    return false;
   }
 
   private recordDuration(ms: number) {

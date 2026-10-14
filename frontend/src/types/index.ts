@@ -2,7 +2,7 @@ export interface TraceSpan {
   traceId: string;
   spanId: string;
   parentSpanId?: string | null;
-  component: 'client' | 'cdn' | 'gateway' | 'loadbalancer' | 'backend' | 'cache' | 'database' | 'storage' | 'autoscaler';
+  component: 'client' | 'cdn' | 'gateway' | 'loadbalancer' | 'backend' | 'cache' | 'database' | 'storage' | 'autoscaler' | 'queue' | 'worker';
   instanceId?: string;
   operation: string;
   status: 'start' | 'success' | 'error' | 'cache-hit' | 'cache-miss' | 'bypassed';
@@ -244,3 +244,82 @@ export interface SystemConfig {
   };
   infrastructureMode: 'standard' | 'single-backend' | 'hpa' | 'cdn-bypass' | 'single-db';
 }
+
+export interface QueueMessage {
+  id: string;
+  topic: string;
+  partition: number;
+  payload: Record<string, any>;
+  timestamp: number;
+  isPoisonPill?: boolean;
+  status: 'queued' | 'processing' | 'completed' | 'dead-letter';
+  retryCount?: number;
+}
+
+export interface WorkerInstance {
+  id: string;
+  name: string;
+  status: 'idle' | 'processing' | 'degraded';
+  processedCount: number;
+  cpuPercent: number;
+  activeJobId?: string | null;
+  avgLatencyMs: number;
+}
+
+export interface QueueMetrics {
+  topic: string;
+  partitions: number;
+  queueDepth: number;
+  consumerLag: number;
+  totalPublished: number;
+  totalConsumed: number;
+  throughputMsgPerSec: number;
+  deadLetterQueueCount: number;
+  workers: WorkerInstance[];
+  recentMessages: QueueMessage[];
+}
+
+export interface RateLimiterMetrics {
+  algorithm: 'token-bucket' | 'sliding-window';
+  capacity: number;
+  tokensAvailable: number;
+  refillRatePerSec: number;
+  totalAllowed: number;
+  totalThrottled: number;
+  isThrottling: boolean;
+}
+
+export interface CircuitBreakerMetrics {
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  failureThreshold: number;
+  consecutiveFailures: number;
+  totalTrips: number;
+  lastStateChange: number;
+  recoveryTimeoutMs: number;
+  fallbackResponses: number;
+}
+
+export interface ResilienceMetrics {
+  rateLimiter: RateLimiterMetrics;
+  circuitBreaker: CircuitBreakerMetrics;
+}
+
+export interface Review {
+  id: number;
+  author_name: string;
+  author_email: string;
+  rating: number;
+  category: string;
+  title: string;
+  comment: string;
+  created_at: string;
+}
+
+export interface ReviewStats {
+  totalReviews: number;
+  avgRating: number;
+  ratingDistribution: Record<number, number>;
+  categoryCounts: Record<string, number>;
+  isLivePostgres: boolean;
+}
+
