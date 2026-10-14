@@ -124,8 +124,16 @@ class QueueService {
     }, 250);
   }
 
-  public publishMessage(payload: Record<string, any>, isPoisonPill = false): QueueMessage {
-    const partition = Math.floor(Math.random() * this.partitions);
+  public publishMessage(payload: Record<string, any>, isPoisonPill = false, partitionKey?: string): QueueMessage {
+    let partition: number;
+    if (partitionKey) {
+      let hash = 0;
+      for (let i = 0; i < partitionKey.length; i++) hash = (hash << 5) - hash + partitionKey.charCodeAt(i);
+      partition = Math.abs(hash) % this.partitions;
+    } else {
+      partition = Math.floor(Math.random() * this.partitions);
+    }
+
     const msg: QueueMessage = {
       id: `msg-${uuidv4().slice(0, 8)}`,
       topic: this.topic,
@@ -149,14 +157,53 @@ class QueueService {
     return msg;
   }
 
+  public async executeOrderSaga(orderData?: any): Promise<any> {
+    const orderId = `ORD-${Date.now().toString().slice(-6)}`;
+    const customerId = orderData?.customerId || `CUST-${Math.floor(Math.random() * 8999) + 1000}`;
+    const amount = orderData?.amount || 149.99;
+    const items = orderData?.items || ['Cloud Microservice Guide', 'Kubernetes Cluster Pass'];
+
+    // 1. Publish to Kafka partition
+    const kafkaMsg = this.publishMessage({
+      orderId,
+      customerId,
+      amount,
+      items,
+      event: 'order.created',
+      sagaStep: 'INITIALIZED',
+    }, false, customerId);
+
+    return {
+      orderId,
+      status: 'ASYNC_PROCESSING',
+      kafka: {
+        topic: kafkaMsg.topic,
+        partition: kafkaMsg.partition,
+        messageId: kafkaMsg.id,
+        partitionKey: customerId,
+        offset: this.totalPublished,
+      },
+      sagaSteps: [
+        { step: 1, component: 'api-gateway', action: 'RATE_LIMIT_CHECK', status: 'ALLOWED' },
+        { step: 2, component: 'load-balancer', action: 'SELECT_BACKEND_POD', status: 'ROUND_ROBIN_SELECTED' },
+        { step: 3, component: 'backend-instance', action: 'POSTGRES_INSERT_PENDING', status: 'COMMITTED_TO_DB' },
+        { step: 4, component: 'queue-broker', action: 'KAFKA_PUBLISH_EVENT', status: 'ACKNOWLEDGED_LEADER', partition: kafkaMsg.partition },
+        { step: 5, component: 'worker-instance', action: 'CONSUMER_POLL_AND_PROCESS', status: 'CONSUMED' },
+        { step: 6, component: 'database', action: 'UPDATE_ORDER_FULFILLED', status: 'SUCCESS' },
+      ],
+      metrics: this.getMetrics(),
+    };
+  }
+
   public simulateBurst(count = 15): { published: number; lag: number } {
     for (let i = 0; i < count; i++) {
+      const key = `user-${(i % 5) + 1}`;
       this.publishMessage({
         event: 'order.placed',
-        userId: Math.floor(Math.random() * 9000) + 1000,
+        userId: key,
         amount: Math.round(Math.random() * 500 * 100) / 100,
         index: i + 1,
-      });
+      }, false, key);
     }
     return { published: count, lag: this.queue.length };
   }

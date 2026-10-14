@@ -5,6 +5,7 @@ import { autoscalerService } from '../services/autoscaler';
 import { cdnService } from '../services/cdn';
 import { cacheService } from '../services/cache';
 import { databaseService } from '../services/database';
+import { resilienceService } from '../services/resilience';
 import { broadcastEvent } from '../websocket/wsServer';
 
 const router = Router();
@@ -104,8 +105,8 @@ router.post('/', (req: Request, res: Response) => {
         config.redis.ttlSeconds = updates.redis.ttlSeconds;
       }
       if (updates.redis.clusterMode || typeof updates.redis.nodesCount === 'number' || updates.redis.hashingStrategy) {
-        const clusterMode = updates.redis.clusterMode || config.redis.clusterMode;
         const nodesCount = typeof updates.redis.nodesCount === 'number' ? updates.redis.nodesCount : config.redis.nodesCount;
+        const clusterMode = updates.redis.clusterMode || (nodesCount > 1 ? 'cluster' : 'standalone');
         const hashingStrategy = updates.redis.hashingStrategy || config.redis.hashingStrategy;
         cacheService.setConfiguration(clusterMode, nodesCount, hashingStrategy);
       }
@@ -117,6 +118,21 @@ router.post('/', (req: Request, res: Response) => {
       const dbReplicas = typeof updates.database.replicasCount === 'number' ? updates.database.replicasCount : config.database.replicasCount;
       const dbShards = typeof updates.database.shardsCount === 'number' ? updates.database.shardsCount : config.database.shardsCount;
       databaseService.setConfiguration(dbMode, dbReplicas, dbShards);
+    }
+
+    // API Gateway & Rate Limiting updates
+    if (updates.apiGateway) {
+      if (!config.apiGateway) {
+        config.apiGateway = {} as any;
+      }
+      Object.assign(config.apiGateway, updates.apiGateway);
+      resilienceService.configureRateLimiter({
+        algorithm: config.apiGateway.rateLimitAlgorithm,
+        capacity: config.apiGateway.capacity,
+        refillRate: config.apiGateway.refillRate,
+        burstAllowance: config.apiGateway.burstAllowance,
+        clientIdentifier: config.apiGateway.clientIdentifier,
+      });
     }
 
     const updatedMetrics = {

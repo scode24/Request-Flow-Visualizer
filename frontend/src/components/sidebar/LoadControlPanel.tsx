@@ -68,6 +68,7 @@ export const LoadControlPanel: React.FC = () => {
             <option value="post_product">✍️ Product Creation (DB Write + Eviction)</option>
             <option value="get_object_storage">📦 MinIO Object S3 Retrieval</option>
             <option value="mixed_workload">🌐 Realistic Multi-Tier Production Mix</option>
+            <option value="kafka_order_stream">📨 Kafka Async Order Stream (Topic Partitions -&gt; Worker -&gt; DB)</option>
           </select>
         </div>
 
@@ -320,6 +321,22 @@ export const LoadControlPanel: React.FC = () => {
 
               <div>
                 <div className="flex justify-between text-[11px] mb-1">
+                  <span className="text-slate-600 dark:text-slate-400">Load Balancer Pods</span>
+                  <span className="font-mono text-blue-500 font-semibold">{config?.loadBalancer.replicas || 1} Pods</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="4"
+                  value={config?.loadBalancer.replicas || 1}
+                  onChange={(e) => updateConfig({ loadBalancer: { replicas: parseInt(e.target.value, 10) } })}
+                  disabled={isRunning}
+                  className="w-full accent-blue-500 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[11px] mb-1">
                   <span className="text-slate-600 dark:text-slate-400">Target RPS Cap</span>
                   <span className="font-mono">{targetRps > 0 ? `${targetRps} req/s` : 'Max Throughput'}</span>
                 </div>
@@ -445,52 +462,32 @@ export const LoadControlPanel: React.FC = () => {
               )}
 
               {/* Redis Cache Scaling & Consistent Hashing Tier Controls */}
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  Redis Cache Architecture
-                </label>
-                <select
-                  value={config?.redis?.clusterMode || 'standalone'}
-                  onChange={(e) =>
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex justify-between text-[11px]">
+                  <span className="font-medium text-slate-600 dark:text-slate-400">Redis Cache Pods</span>
+                  <span className="font-mono text-rose-500 font-semibold">{config?.redis?.nodesCount || (config?.redis?.clusterMode === 'cluster' ? 2 : 1)} Pods</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="4"
+                  value={config?.redis?.nodesCount || (config?.redis?.clusterMode === 'cluster' ? 2 : 1)}
+                  onChange={(e) => {
+                    const count = parseInt(e.target.value, 10);
                     updateConfig({
                       redis: {
-                        clusterMode: e.target.value as 'standalone' | 'cluster',
+                        nodesCount: count,
+                        clusterMode: count > 1 ? 'cluster' : 'standalone',
                       },
-                    })
-                  }
+                    });
+                  }}
                   disabled={isRunning}
-                  className="w-full text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5"
-                >
-                  <option value="standalone">Standalone (Single Cache Node)</option>
-                  <option value="cluster">Sharded Cluster (Multi-Node Hashing)</option>
-                </select>
-              </div>
+                  className="w-full accent-rose-500 cursor-pointer"
+                />
 
-              {config?.redis?.clusterMode === 'cluster' && (
-                <div className="space-y-2">
+                {(config?.redis?.nodesCount || (config?.redis?.clusterMode === 'cluster' ? 2 : 1)) > 1 && (
                   <div>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="text-slate-600 dark:text-slate-400">Cache Nodes Count</span>
-                      <span className="font-mono text-red-500 font-semibold">{config?.redis?.nodesCount || 2} Nodes</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="2"
-                      max="4"
-                      value={config?.redis?.nodesCount || 2}
-                      onChange={(e) =>
-                        updateConfig({
-                          redis: {
-                            nodesCount: parseInt(e.target.value, 10),
-                          },
-                        })
-                      }
-                      disabled={isRunning}
-                      className="w-full accent-red-500 cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    <label className="block text-[10px] font-medium text-slate-500 mb-0.5">
                       Cache Hashing Strategy
                     </label>
                     <select
@@ -509,8 +506,72 @@ export const LoadControlPanel: React.FC = () => {
                       <option value="modulo">Modulo Hash (Simple Partitioning)</option>
                     </select>
                   </div>
+                )}
+              </div>
+
+              {/* API Gateway Rate Limiting Controls */}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                  Gateway Rate Limiting Policy
+                </label>
+                <select
+                  value={config?.apiGateway?.rateLimitAlgorithm || 'token-bucket'}
+                  onChange={(e) =>
+                    updateConfig({
+                      apiGateway: {
+                        ...(config?.apiGateway || {
+                          rateLimitEnabled: true,
+                          capacity: 100,
+                          refillRate: 20,
+                          burstAllowance: 150,
+                          timeoutMs: 5000,
+                          corsEnabled: true,
+                          clientIdentifier: 'ip',
+                        }),
+                        rateLimitAlgorithm: e.target.value as any,
+                      },
+                    })
+                  }
+                  disabled={isRunning}
+                  className="w-full text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5"
+                >
+                  <option value="token-bucket">Token Bucket (Continuous Refill)</option>
+                  <option value="leaky-bucket">Leaky Bucket (FIFO Smoothing)</option>
+                  <option value="sliding-window">Sliding Window Log (Rolling 1s)</option>
+                  <option value="fixed-window">Fixed Window Counter (1s Epoch)</option>
+                </select>
+
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-500 mb-0.5">
+                    Client Identification Strategy
+                  </label>
+                  <select
+                    value={config?.apiGateway?.clientIdentifier || 'ip'}
+                    onChange={(e) =>
+                      updateConfig({
+                        apiGateway: {
+                          ...(config?.apiGateway || {
+                            rateLimitEnabled: true,
+                            rateLimitAlgorithm: 'token-bucket',
+                            capacity: 100,
+                            refillRate: 20,
+                            burstAllowance: 150,
+                            timeoutMs: 5000,
+                            corsEnabled: true,
+                          }),
+                          clientIdentifier: e.target.value as any,
+                        },
+                      })
+                    }
+                    disabled={isRunning}
+                    className="w-full text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-1.5"
+                  >
+                    <option value="ip">Client IP Address (Layer-3)</option>
+                    <option value="api-key">API Key (X-API-Key Header)</option>
+                    <option value="jwt-user">JWT Subject (Authorization Bearer)</option>
+                  </select>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>

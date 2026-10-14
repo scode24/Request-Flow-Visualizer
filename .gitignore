@@ -11,3 +11,4 @@ coverage/
 minio-data/
 pg-data/
 redis-data/
+request_flow_dark_demo.mp4

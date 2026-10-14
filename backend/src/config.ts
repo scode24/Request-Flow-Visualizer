@@ -57,6 +57,16 @@ export interface SystemConfig {
     shardsCount: number;
     shardingKey: 'hash' | 'range';
   };
+  apiGateway: {
+    rateLimitEnabled: boolean;
+    rateLimitAlgorithm: 'token-bucket' | 'leaky-bucket' | 'sliding-window' | 'fixed-window';
+    capacity: number;
+    refillRate: number;
+    clientIdentifier: 'ip' | 'api-key' | 'jwt-user';
+    burstAllowance: number;
+    timeoutMs: number;
+    corsEnabled: boolean;
+  };
   infrastructureMode: 'standard' | 'single-backend' | 'hpa' | 'cdn-bypass' | 'single-db';
 }
 
@@ -115,6 +125,16 @@ export const config: SystemConfig = {
     replicasCount: parseInt(process.env.DB_REPLICAS || '2', 10),
     shardsCount: parseInt(process.env.DB_SHARDS || '2', 10),
     shardingKey: 'hash',
+  },
+  apiGateway: {
+    rateLimitEnabled: true,
+    rateLimitAlgorithm: (process.env.RATE_LIMIT_ALGO as any) || 'token-bucket',
+    capacity: parseInt(process.env.RATE_LIMIT_CAPACITY || '100', 10),
+    refillRate: parseInt(process.env.RATE_LIMIT_REFILL || '20', 10),
+    clientIdentifier: (process.env.RATE_LIMIT_IDENTIFIER as any) || 'ip',
+    burstAllowance: parseInt(process.env.RATE_LIMIT_BURST || '150', 10),
+    timeoutMs: 5000,
+    corsEnabled: true,
   },
   infrastructureMode: (process.env.INFRASTRUCTURE_MODE as any) || 'standard',
 };

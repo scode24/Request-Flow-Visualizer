@@ -165,7 +165,7 @@ export interface AutoscalerMetrics {
 }
 
 export interface LoadTestConfig {
-  scenario: 'get_product_cached' | 'get_product_uncached' | 'get_random_product' | 'post_product' | 'get_object_storage' | 'mixed_workload';
+  scenario: 'get_product_cached' | 'get_product_uncached' | 'get_random_product' | 'post_product' | 'get_object_storage' | 'mixed_workload' | 'kafka_order_stream';
   concurrentUsers: number;
   durationSeconds: number;
   targetRps?: number;
@@ -242,6 +242,16 @@ export interface SystemConfig {
     shardsCount: number;
     shardingKey: 'hash' | 'range';
   };
+  apiGateway?: {
+    rateLimitEnabled: boolean;
+    rateLimitAlgorithm: 'token-bucket' | 'leaky-bucket' | 'sliding-window' | 'fixed-window';
+    capacity: number;
+    refillRate: number;
+    clientIdentifier: 'ip' | 'api-key' | 'jwt-user';
+    burstAllowance: number;
+    timeoutMs: number;
+    corsEnabled: boolean;
+  };
   infrastructureMode: 'standard' | 'single-backend' | 'hpa' | 'cdn-bypass' | 'single-db';
 }
 
@@ -280,10 +290,12 @@ export interface QueueMetrics {
 }
 
 export interface RateLimiterMetrics {
-  algorithm: 'token-bucket' | 'sliding-window';
+  algorithm: 'token-bucket' | 'leaky-bucket' | 'sliding-window' | 'fixed-window';
   capacity: number;
   tokensAvailable: number;
   refillRatePerSec: number;
+  clientIdentifier?: string;
+  burstAllowance?: number;
   totalAllowed: number;
   totalThrottled: number;
   isThrottling: boolean;

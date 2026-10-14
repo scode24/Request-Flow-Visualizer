@@ -258,11 +258,25 @@ router.post('/autoscaler/simulate-spike', (req: Request, res: Response) => {
 router.post('/queue/publish', (req: Request, res: Response) => {
   try {
     const payload = req.body.payload || { event: 'user.signup', email: 'test@example.com', timestamp: Date.now() };
-    const msg = queueService.publishMessage(payload);
+    const partitionKey = req.body.partitionKey;
+    const isPoisonPill = Boolean(req.body.isPoisonPill);
+    const msg = queueService.publishMessage(payload, isPoisonPill, partitionKey);
     res.json({
-      message: 'Event published to queue',
+      message: partitionKey ? `Event published to topic partition (Key: ${partitionKey} -> Partition #${msg.partition})` : 'Event published to queue',
       event: msg,
       metrics: queueService.getMetrics(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/queue/order-saga', async (req: Request, res: Response) => {
+  try {
+    const result = await queueService.executeOrderSaga(req.body);
+    res.json({
+      message: 'Kafka asynchronous order saga executed! Tracked from Gateway -> LB -> Backend -> Kafka Topic Partition -> Worker -> DB.',
+      result,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

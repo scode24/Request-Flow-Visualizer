@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Database, HardDrive, Split, Globe, ArrowUpRight, Play, RefreshCw, Trash2, CheckCircle2, Layers, ShieldAlert } from 'lucide-react';
+import { Zap, Database, HardDrive, Split, Globe, ArrowUpRight, Play, RefreshCw, Trash2, CheckCircle2, Layers, ShieldAlert, ShoppingCart, Shuffle, Hash } from 'lucide-react';
 import { useSystem } from '../../context/SystemContext';
 
 type ComponentTab = 'cache' | 'database' | 'storage' | 'loadbalancer' | 'cdn' | 'autoscaler' | 'queue' | 'resilience';
@@ -125,20 +125,41 @@ export const ComponentTestingView: React.FC = () => {
   };
 
   // 7. Message Queue Test
-  const runQueueTest = async (op: 'publish' | 'burst' | 'poison' | 'clear') => {
+  const runQueueTest = async (
+    op: 'publish' | 'burst' | 'poison' | 'clear' | 'order-saga' | 'partition-hash',
+    extra?: { customerId?: string; partitionKey?: string; count?: number }
+  ) => {
     setLoading(true);
     try {
       let endpoint = '/api/test/queue/publish';
       let body: any = { payload: { event: 'order.created', amount: 149.99, timestamp: Date.now() } };
       if (op === 'burst') {
         endpoint = '/api/test/queue/burst';
-        body = { count: 20 };
+        body = { count: extra?.count || 20 };
       } else if (op === 'poison') {
         endpoint = '/api/test/queue/poison-pill';
         body = {};
       } else if (op === 'clear') {
         endpoint = '/api/test/queue/clear';
         body = {};
+      } else if (op === 'order-saga') {
+        endpoint = '/api/test/queue/order-saga';
+        body = {
+          customerId: extra?.customerId || `CUST-${Math.floor(Math.random() * 8999) + 1000}`,
+          amount: 249.50,
+          items: ['Cloud Microservice Pack', 'Kafka Partition Cluster Access'],
+        };
+      } else if (op === 'partition-hash') {
+        endpoint = '/api/test/queue/publish';
+        body = {
+          partitionKey: extra?.partitionKey || 'user-vip-88',
+          payload: {
+            event: 'order.payment_settled',
+            user: extra?.partitionKey || 'user-vip-88',
+            amount: 189.0,
+            timestamp: Date.now(),
+          },
+        };
       }
 
       const res = await fetch(endpoint, {
@@ -456,16 +477,64 @@ export const ComponentTestingView: React.FC = () => {
             {activeTab === 'queue' && (
               <div className="space-y-4 text-xs">
                 <div>
-                  <h4 className="font-semibold text-slate-800 dark:text-slate-200">Kafka / Message Queue Testing</h4>
+                  <h4 className="font-semibold text-slate-800 dark:text-slate-200">Kafka Message Queue & Event Streaming</h4>
                   <p className="text-slate-500 mt-1">
-                    Simulate asynchronous event publishing, consumer lag accumulation, and Dead Letter Queue (DLQ) poison pills.
+                    Simulate asynchronous event streaming, distributed order sagas, partition key hashing, and Dead Letter Queue (DLQ).
                   </p>
                 </div>
+
                 <div className="space-y-2.5">
+                  {/* Distributed Saga */}
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 dark:border-amber-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                        <ShoppingCart className="w-3.5 h-3.5 text-amber-500" />
+                        <span>E-Commerce Distributed Saga</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold">End-to-End</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800/80 dark:text-amber-300/70">
+                      Dispatches order through Gateway → LB → Backend → Kafka Topic Partition → Worker → DB Transaction.
+                    </p>
+                    <button
+                      onClick={() => runQueueTest('order-saga')}
+                      disabled={loading}
+                      className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium flex items-center justify-between shadow-sm transition-all"
+                    >
+                      <span>Execute Order Saga (Kafka Async)</span>
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                    </button>
+                  </div>
+
+                  {/* Partition Hashing */}
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Consistent Partition Key Hashing</span>
+                    </span>
+                    <p className="text-[11px] text-slate-500">
+                      Messages with identical keys deterministically hash to the same Kafka partition to preserve ordering.
+                    </p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {['user-vip-101', 'user-vip-88', 'tenant-eu-west'].map((k) => (
+                        <button
+                          key={k}
+                          onClick={() => runQueueTest('partition-hash', { partitionKey: k })}
+                          disabled={loading}
+                          className="py-1.5 px-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-400 font-mono text-[10px] truncate text-center transition-all text-slate-700 dark:text-slate-300"
+                          title={`Hash key: ${k}`}
+                        >
+                          {k}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Standard Operations */}
                   <button
                     onClick={() => runQueueTest('publish')}
                     disabled={loading}
-                    className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-medium text-left flex items-center justify-between"
+                    className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium text-left flex items-center justify-between"
                   >
                     <span>Publish Single Event (order.created)</span>
                     <Play className="w-3.5 h-3.5 text-amber-500" />
@@ -474,25 +543,25 @@ export const ComponentTestingView: React.FC = () => {
                   <button
                     onClick={() => runQueueTest('burst')}
                     disabled={loading}
-                    className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium text-left flex items-center justify-between"
+                    className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium text-left flex items-center justify-between"
                   >
                     <span>Simulate 20-Message Burst (Builds Consumer Lag)</span>
-                    <Layers className="w-3.5 h-3.5 text-white" />
+                    <Layers className="w-3.5 h-3.5 text-amber-500" />
                   </button>
 
                   <button
                     onClick={() => runQueueTest('poison')}
                     disabled={loading}
-                    className="w-full py-2 px-3 rounded-lg bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-800/80 hover:bg-rose-100 text-rose-700 dark:text-rose-300 font-medium text-left flex items-center justify-between"
+                    className="w-full py-2 px-3 rounded-lg bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-800/80 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-700 dark:text-rose-300 font-medium text-left flex items-center justify-between"
                   >
                     <span>Inject Poison Pill (Routes to Dead Letter Queue)</span>
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200">DLQ</span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200">DLQ</span>
                   </button>
 
                   <button
                     onClick={() => runQueueTest('clear')}
                     disabled={loading}
-                    className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-medium text-left flex items-center justify-between text-slate-500"
+                    className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium text-left flex items-center justify-between text-slate-500"
                   >
                     <span>Purge Queue & Reset Workers</span>
                     <Trash2 className="w-3.5 h-3.5 text-slate-400" />

@@ -11,6 +11,15 @@ export const ConfigManagementView: React.FC = () => {
   const [cdnTtl, setCdnTtl] = useState(config?.cdn.ttlSeconds ?? 30);
   const [cdnLatency, setCdnLatency] = useState(config?.cdn.simulatedLatencyMs ?? 10);
 
+  // API Gateway & Rate Limiting states
+  const [rateLimitEnabled, setRateLimitEnabled] = useState(config?.apiGateway?.rateLimitEnabled ?? true);
+  const [rateLimitAlgorithm, setRateLimitAlgorithm] = useState(config?.apiGateway?.rateLimitAlgorithm ?? 'token-bucket');
+  const [gatewayCapacity, setGatewayCapacity] = useState(config?.apiGateway?.capacity ?? 100);
+  const [gatewayRefillRate, setGatewayRefillRate] = useState(config?.apiGateway?.refillRate ?? 20);
+  const [burstAllowance, setBurstAllowance] = useState(config?.apiGateway?.burstAllowance ?? 150);
+  const [clientIdentifier, setClientIdentifier] = useState(config?.apiGateway?.clientIdentifier ?? 'ip');
+  const [gatewayTimeout, setGatewayTimeout] = useState(config?.apiGateway?.timeoutMs ?? 5000);
+
   const [lbAlgorithm, setLbAlgorithm] = useState(config?.loadBalancer.algorithm ?? 'round-robin');
   const [lbReplicas, setLbReplicas] = useState(config?.loadBalancer.replicas ?? 1);
 
@@ -36,6 +45,15 @@ export const ConfigManagementView: React.FC = () => {
       setCdnEnabled(config.cdn.enabled);
       setCdnTtl(config.cdn.ttlSeconds);
       setCdnLatency(config.cdn.simulatedLatencyMs);
+      if (config.apiGateway) {
+        setRateLimitEnabled(config.apiGateway.rateLimitEnabled);
+        setRateLimitAlgorithm(config.apiGateway.rateLimitAlgorithm);
+        setGatewayCapacity(config.apiGateway.capacity);
+        setGatewayRefillRate(config.apiGateway.refillRate);
+        setBurstAllowance(config.apiGateway.burstAllowance);
+        setClientIdentifier(config.apiGateway.clientIdentifier);
+        setGatewayTimeout(config.apiGateway.timeoutMs);
+      }
       setLbAlgorithm(config.loadBalancer.algorithm);
       setLbReplicas(config.loadBalancer.replicas);
       setBackendReplicas(config.backend.activeReplicas);
@@ -60,6 +78,16 @@ export const ConfigManagementView: React.FC = () => {
     e.preventDefault();
     await updateConfig({
       cdn: { enabled: cdnEnabled, ttlSeconds: cdnTtl, simulatedLatencyMs: cdnLatency },
+      apiGateway: {
+        rateLimitEnabled,
+        rateLimitAlgorithm,
+        capacity: gatewayCapacity,
+        refillRate: gatewayRefillRate,
+        burstAllowance,
+        clientIdentifier,
+        timeoutMs: gatewayTimeout,
+        corsEnabled: true,
+      },
       loadBalancer: { algorithm: lbAlgorithm, replicas: lbReplicas },
       backend: {
         activeReplicas: backendReplicas,
@@ -71,7 +99,7 @@ export const ConfigManagementView: React.FC = () => {
         enabled: redisEnabled,
         ttlSeconds: redisTtl,
         clusterMode: redisClusterMode,
-        nodesCount: redisNodesCount,
+        nodesCount: redisClusterMode === 'cluster' ? Math.max(2, redisNodesCount) : 1,
         hashingStrategy: redisHashingStrategy,
       },
       database: {
@@ -140,6 +168,96 @@ export const ConfigManagementView: React.FC = () => {
                   type="number"
                   value={cdnLatency}
                   onChange={(e) => setCdnLatency(parseInt(e.target.value, 10))}
+                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* API Gateway & Traffic Policy */}
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                API Gateway & Rate Limiting Strategy
+              </h3>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 font-semibold border border-purple-200 dark:border-purple-800/80">
+                {rateLimitAlgorithm.toUpperCase().replace('-', ' ')}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Rate Limiting Algorithm</label>
+                <select
+                  value={rateLimitAlgorithm}
+                  onChange={(e) => setRateLimitAlgorithm(e.target.value as any)}
+                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                >
+                  <option value="token-bucket">Token Bucket (Continuous Refill)</option>
+                  <option value="leaky-bucket">Leaky Bucket (FIFO Queue Smoothing)</option>
+                  <option value="sliding-window">Sliding Window Log (Rolling 1s Counter)</option>
+                  <option value="fixed-window">Fixed Window Counter (1s Epoch Reset)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Client Identification Strategy</label>
+                <select
+                  value={clientIdentifier}
+                  onChange={(e) => setClientIdentifier(e.target.value as any)}
+                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                >
+                  <option value="ip">Client IP Address (Layer-3 X-Forwarded-For)</option>
+                  <option value="api-key">API Key Header (X-API-Key)</option>
+                  <option value="jwt-user">JWT Subject (Authorization Bearer)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Bucket Capacity (Max Tokens)</label>
+                <input
+                  type="number"
+                  min="10"
+                  max="1000"
+                  value={gatewayCapacity}
+                  onChange={(e) => setGatewayCapacity(parseInt(e.target.value, 10))}
+                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Refill Rate (Tokens / Sec)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={gatewayRefillRate}
+                  onChange={(e) => setGatewayRefillRate(parseInt(e.target.value, 10))}
+                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Burst Allowance Cap</label>
+                <input
+                  type="number"
+                  min="10"
+                  max="2000"
+                  value={burstAllowance}
+                  onChange={(e) => setBurstAllowance(parseInt(e.target.value, 10))}
+                  className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-400 mb-1">Gateway Timeout (ms)</label>
+                <input
+                  type="number"
+                  min="500"
+                  max="30000"
+                  step="500"
+                  value={gatewayTimeout}
+                  onChange={(e) => setGatewayTimeout(parseInt(e.target.value, 10))}
                   className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono"
                 />
               </div>

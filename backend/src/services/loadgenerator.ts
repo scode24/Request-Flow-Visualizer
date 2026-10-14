@@ -1,7 +1,8 @@
+import { setMaxListeners } from 'events';
 import { broadcastEvent } from '../websocket/wsServer';
 
 export interface LoadTestConfig {
-  scenario: 'get_product_cached' | 'get_product_uncached' | 'get_random_product' | 'post_product' | 'get_object_storage' | 'mixed_workload';
+  scenario: 'get_product_cached' | 'get_product_uncached' | 'get_random_product' | 'post_product' | 'get_object_storage' | 'mixed_workload' | 'kafka_order_stream';
   concurrentUsers: number;
   durationSeconds: number;
   targetRps?: number;
@@ -54,6 +55,11 @@ class LoadGeneratorService {
     this.currentTestId = Math.random().toString(36).substring(2, 9);
     this.activeConfig = config;
     this.abortController = new AbortController();
+    try {
+      setMaxListeners(0, this.abortController.signal);
+    } catch {
+      // ignore
+    }
 
     this.totalRequests = 0;
     this.successfulRequests = 0;
@@ -184,6 +190,16 @@ class LoadGeneratorService {
             category: 'Testing',
           });
         }
+        break;
+      }
+      case 'kafka_order_stream': {
+        url = `${baseUrl}/api/test/queue/order-saga`;
+        method = 'POST';
+        body = JSON.stringify({
+          customerId: `USER-${Math.floor(Math.random() * 9000) + 1000}`,
+          amount: Math.floor(Math.random() * 400) + 25,
+          items: ['Kafka Stream Ticket', 'Distributed Event Voucher'],
+        });
         break;
       }
     }

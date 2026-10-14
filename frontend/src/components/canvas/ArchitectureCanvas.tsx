@@ -95,7 +95,7 @@ const ArchitectureCanvasContent: React.FC = () => {
     // Stable vertical reference for Ingress pipeline
     const ingressY = 220;
 
-    // 1. Build Ingress Nodes (Client, CDN, Gateway, Load Balancer)
+    // 1. Build Ingress Nodes (Client, CDN, Gateway)
     const nodes: Node[] = [
       {
         id: 'client',
@@ -119,16 +119,50 @@ const ArchitectureCanvasContent: React.FC = () => {
           rateLimit: 1000,
         },
       },
-      {
-        id: 'loadbalancer',
-        type: 'loadbalancer',
-        position: { x: COL_LB, y: ingressY },
-        data: {
-          algorithm: lbAlgorithm,
-          replicas: lbReplicas,
-        },
-      },
     ];
+
+    // Load Balancer Pods (Column 4: Single vs Multi-Pod Ingress Cluster)
+    const effectiveLbReplicas = Math.max(1, Math.min(4, lbReplicas));
+    const lbNodeList: Array<{
+      id: string;
+      name: string;
+      index: number;
+      y: number;
+    }> = [];
+
+    if (effectiveLbReplicas === 1) {
+      lbNodeList.push({
+        id: 'loadbalancer',
+        name: 'Load Balancer',
+        index: 1,
+        y: ingressY,
+      });
+    } else {
+      const lbStartY = Math.max(60, ingressY - ((effectiveLbReplicas - 1) * NODE_STEP_Y) / 2);
+      for (let i = 1; i <= effectiveLbReplicas; i++) {
+        lbNodeList.push({
+          id: `loadbalancer-${i}`,
+          name: i === 1 ? 'LB Leader Pod #1' : `LB Ingress Pod #${i}`,
+          index: i,
+          y: lbStartY + (i - 1) * NODE_STEP_Y,
+        });
+      }
+    }
+
+    lbNodeList.forEach((lbNode) => {
+      nodes.push({
+        id: lbNode.id,
+        type: 'loadbalancer',
+        position: { x: COL_LB, y: lbNode.y },
+        data: {
+          instanceId: lbNode.id,
+          name: lbNode.name,
+          index: lbNode.index,
+          algorithm: lbAlgorithm,
+          replicas: effectiveLbReplicas,
+        },
+      });
+    });
 
     // 2. Build Backend Replicas (Column 5)
     // Fixed start at y = 180 (Autoscaler sits above at y = 30)
@@ -159,8 +193,13 @@ const ArchitectureCanvasContent: React.FC = () => {
     const backendEndY = backendStartY + (replicaCount - 1) * NODE_STEP_Y + NODE_HEIGHT;
 
     // 3. Redis Cache Tier (Column 6: Standalone vs Consistent Hashing Cluster)
-    const cacheClusterMode = config?.redis?.clusterMode || 'standalone';
-    const cacheNodesCount = cacheClusterMode === 'cluster' ? Math.max(2, Math.min(4, config?.redis?.nodesCount || 2)) : 1;
+    const rawClusterMode = config?.redis?.clusterMode || 'standalone';
+    const configNodesCount = config?.redis?.nodesCount;
+    const cacheNodesCount = Math.max(
+      1,
+      Math.min(4, typeof configNodesCount === 'number' && configNodesCount > 1 ? configNodesCount : (rawClusterMode === 'cluster' ? Math.max(2, configNodesCount || 2) : 1))
+    );
+    const cacheClusterMode = cacheNodesCount > 1 ? 'cluster' : rawClusterMode;
     const cacheStrategy = config?.redis?.hashingStrategy || 'consistent-hashing';
 
     const cacheStartY = 40;
@@ -335,15 +374,25 @@ const ArchitectureCanvasContent: React.FC = () => {
       });
     }
 
-    edges.push({ id: 'e-gateway-lb', source: 'gateway', target: 'loadbalancer', type: 'animated' });
-
-    // Load Balancer to Backend Replicas
-    replicaList.forEach((rep) => {
+    // Gateway to Load Balancer Pods
+    lbNodeList.forEach((lbNode) => {
       edges.push({
-        id: `e-lb-${rep.id}`,
-        source: 'loadbalancer',
-        target: rep.id,
+        id: `e-gateway-${lbNode.id}`,
+        source: 'gateway',
+        target: lbNode.id,
         type: 'animated',
+      });
+    });
+
+    // Load Balancer Pods to Backend Replicas
+    replicaList.forEach((rep) => {
+      lbNodeList.forEach((lbNode) => {
+        edges.push({
+          id: `e-${lbNode.id}-${rep.id}`,
+          source: lbNode.id,
+          target: rep.id,
+          type: 'animated',
+        });
       });
 
       // Backend Replicas to Redis Cache Tier
@@ -475,6 +524,7 @@ const ArchitectureCanvasContent: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState(graphData.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(graphData.edges);
   const prevReplicaCountRef = useRef(replicaCount);
+  const prevLbReplicasRef = useRef(lbReplicas);
   const prevDbSigRef = useRef(`${config?.database?.mode}-${config?.database?.replicasCount}-${config?.database?.shardsCount}`);
   const prevCacheSigRef = useRef(`${config?.redis?.clusterMode}-${config?.redis?.nodesCount}-${config?.redis?.hashingStrategy}`);
   const prevCdnRef = useRef(cdnEnabled);
@@ -484,13 +534,15 @@ const ArchitectureCanvasContent: React.FC = () => {
     const currentDbSig = `${config?.database?.mode}-${config?.database?.replicasCount}-${config?.database?.shardsCount}`;
     const currentCacheSig = `${config?.redis?.clusterMode}-${config?.redis?.nodesCount}-${config?.redis?.hashingStrategy}`;
     const replicaCountChanged = prevReplicaCountRef.current !== replicaCount;
+    const lbReplicasChanged = prevLbReplicasRef.current !== lbReplicas;
     const dbTopologyChanged = prevDbSigRef.current !== currentDbSig;
     const cacheTopologyChanged = prevCacheSigRef.current !== currentCacheSig;
     const cdnChanged = prevCdnRef.current !== cdnEnabled;
 
-    const anyTopologyScaled = replicaCountChanged || dbTopologyChanged || cacheTopologyChanged || cdnChanged;
+    const anyTopologyScaled = replicaCountChanged || lbReplicasChanged || dbTopologyChanged || cacheTopologyChanged || cdnChanged;
 
     prevReplicaCountRef.current = replicaCount;
+    prevLbReplicasRef.current = lbReplicas;
     prevDbSigRef.current = currentDbSig;
     prevCacheSigRef.current = currentCacheSig;
     prevCdnRef.current = cdnEnabled;
