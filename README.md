@@ -14,6 +14,46 @@ The platform visually demonstrates how a modern cloud-native system processes AP
 
 ---
 
+## ⚡ One-Click Quick Start
+
+Get the entire application up and running with a single command!
+
+### macOS / Linux
+```bash
+git clone https://github.com/your-username/Request-Flow-Visualizer.git
+cd Request-Flow-Visualizer
+
+# Run the automated setup script
+chmod +x setup.sh && ./setup.sh
+
+# Start backend & frontend concurrently
+npm run dev
+```
+
+### Windows
+```cmd
+git clone https://github.com/your-username/Request-Flow-Visualizer.git
+cd Request-Flow-Visualizer
+
+# Run the automated setup batch script
+setup.bat
+
+# Start backend & frontend concurrently
+npm run dev
+```
+
+### Alternatively via npm
+```bash
+npm run setup
+npm run dev
+```
+
+Open **[http://localhost:3000](http://localhost:3000)** in your browser!
+
+> 💡 **Zero-Dependency In-Memory Mode**: If live Docker services (PostgreSQL, Redis, MinIO) are not running on your machine, the backend transparently falls back to high-fidelity in-memory emulation. It works 100% out-of-the-box!
+
+---
+
 ## 📸 Platform Screenshots
 
 ### 1. Interactive Architecture Flow Canvas (Light Mode)
@@ -33,21 +73,45 @@ The platform visually demonstrates how a modern cloud-native system processes AP
 
 ---
 
-## 🌟 Key Features
+## 🌟 Key Features & Architectural Tiers
 
-- **Interactive Architecture Canvas**: Draggable, zoomable React Flow (`@xyflow/react`) canvas with icon-first infrastructure nodes for **Client**, **CDN Edge Network**, **API Gateway**, **Load Balancer**, **Stateless Backend Replicas**, **Redis Cache**, **PostgreSQL Database**, **MinIO S3 Storage**, and **Kubernetes HPA Autoscaler**.
-- **Real-Time Request Packet Tracing**: Dynamic particle flow animations represent real backend OpenTelemetry-compatible traces streamed over WebSockets (`ws`).
-- **Concurrent Load Testing Lab**: In-engine multi-user HTTP traffic generator with real-time throughput (RPS), p50, p95, and p99 percentiles, status code breakdowns, and configurable concurrency limits.
-- **Dynamic Topology Modes**:
-  - **Standard Distributed Tier**: Multi-replica backend, CDN, Redis, PostgreSQL, and MinIO.
-  - **Single Backend Pod**: 1 replica without autoscaling.
-  - **Kubernetes HPA**: Dynamic auto-scaling based on real-time CPU thresholds.
-  - **CDN Bypass**: Instant route rerouting directly from Client to API Gateway with visual bypass styling.
-  - **Single Database Tier**: Dedicated database connection pool monitoring.
-- **Independent Component Testing**: Dedicated tabs to execute isolated operations on Redis (GET, SET, DEL, TTL, FLUSHALL), PostgreSQL (SELECT, INSERT, seed reset), MinIO (list, read, write JSON objects), Load Balancer (traffic distribution test across algorithms), CDN (edge cache hits/misses), and HPA (CPU spike injection).
-- **Interactive API Console**: Integrated REST API tester with predefined endpoints, headers, payloads, and response telemetry.
-- **Refined Light & Dark Themes**: Modern developer-tool aesthetic with persistent theme switching.
-- **Zero-Dependency Local Emulation**: Automatically detects if live Docker services (PostgreSQL, Redis, MinIO) are running; if offline, transparently falls back to local in-memory engines so the app runs out-of-the-box via `npm run dev`!
+### 1. Multi-Pod L4/L7 Load Balancing
+- **Dynamic Pod Scaling**: Scale Load Balancer instances on the canvas from **1 to 4 pods** with zero node overlapping.
+- **Balancing Strategies**: Supports **Round-Robin**, **Least Connections**, and **IP Hash** algorithms.
+- **Active Traffic Distribution**: Ingress Gateway distributes requests across all active LB pods, which in turn dynamically balance across downstream backend pods.
+
+### 2. Multi-Node Redis Distributed Cache Cluster
+- **Cluster Sharding**: Dynamically scale Redis from 1 standalone node to **2, 3, or 4 cluster pods**.
+- **Cache Eviction & Expiry**: Configurable TTL expiry, LRU/LFU cache policies, and cache hit/miss ratio telemetry.
+
+### 3. Configurable API Gateway Rate Limiting
+- **Supported Algorithms**:
+  - `token-bucket` (with burst allowance and refill rates)
+  - `leaky-bucket` (constant outflow rate)
+  - `sliding-window` (timestamp logs with weighted interval counters)
+  - `fixed-window` (discrete counter per time slice)
+- **Client Identification Strategies**: Rate limits can be tracked per **Client IP (`ip`)**, **API Key (`api-key`)**, or **User JWT (`jwt-user`)**.
+- **Visual Badges**: Active rate limiter policies are displayed directly on the Gateway node on the canvas.
+
+### 4. Apache Kafka Messaging & Distributed Sagas
+- **E-Commerce Order Saga**: Asynchronously traces distributed transactions end-to-end:
+  $$\text{Gateway} \longrightarrow \text{Load Balancer} \longrightarrow \text{Backend} \longrightarrow \text{Kafka Topic Partition} \longrightarrow \text{Worker Consumer} \longrightarrow \text{Database}$$
+- **Consistent Partition Key Hashing**: Deterministically routes messages by key (`user-vip-101`, `tenant-eu-west`, etc.) to specific topic partitions to preserve strict ordering.
+- **Dead Letter Queue (DLQ)**: Injects malformed poison pills and visualizes worker error handling with automatic routing to the DLQ.
+- **Kafka Stream Load Scenario**: Simulates high-throughput asynchronous event publishing directly from the Load Control Panel.
+
+### 5. Concurrent Load Testing & Real-Time Tracing
+- **Traffic Generator**: In-engine multi-user HTTP traffic generator with real-time throughput (RPS), p50, p95, and p99 percentiles, status code breakdowns, and configurable concurrency limits.
+- **OpenTelemetry Packet Flow**: Dynamic particle animations visually represent real distributed trace paths streamed via WebSockets.
+
+### 6. Independent Component Testing Lab
+- Test individual tiers in complete isolation:
+  - **Redis Cache**: GET, SET, key invalidation, flush.
+  - **PostgreSQL Database**: SELECT, INSERT, connection pool exhaustion.
+  - **MinIO S3**: Upload and download simulated media/documents.
+  - **Load Balancers**: Traffic dispersion test across algorithms.
+  - **Kafka Queue**: Order Saga, partition key hashing, 20-message bursts, poison pill DLQ.
+  - **Resilience**: Fail-fast circuit breaker tripping (OPEN/CLOSED/HALF-OPEN) and token exhaustion (HTTP 429).
 
 ---
 
@@ -55,45 +119,19 @@ The platform visually demonstrates how a modern cloud-native system processes AP
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | React 18, TypeScript, Tailwind CSS, React Flow (`@xyflow/react`), Framer Motion, Lucide React, Vite |
+| **Frontend** | React 18, TypeScript, Tailwind CSS, React Flow (`@xyflow/react`), Lucide React, Vite |
 | **Backend** | Node.js, Express.js, TypeScript, WebSockets (`ws`), OpenTelemetry-compatible Tracer |
 | **Databases & Storage** | PostgreSQL 16 (`pg`), Redis 7 (`redis`), MinIO S3 (`minio`) |
+| **Message Queue** | In-Engine Apache Kafka emulation with Topic Partitions, Consumer Groups & DLQ |
 | **Observability** | Prometheus (`prom-client`), Grafana dashboards |
 | **Containerization** | Docker, Docker Compose (multi-stage builds) |
-| **Orchestration** | Kubernetes manifests (Minikube / Kind / K3s) with HorizontalPodAutoscaler (HPA) |
-
----
-
-## 🚀 Quick Start (Local Development)
-
-### 1. Prerequisites
-- Node.js >= 20.x
-- npm >= 10.x
-- Docker (optional for local mock mode; required for full container stack)
-
-### 2. Installation
-```bash
-# Clone the repository
-git clone https://github.com/your-username/Request-Flow-Visualizer.git
-cd Request-Flow-Visualizer
-
-# Install dependencies and build
-npm run build:backend
-npm run build:frontend
-```
-
-### 3. Run Dev Server (Zero-Docker Mock Mode)
-Run both the Express backend (port 4000) and the Vite frontend (port 3000) concurrently:
-```bash
-npm run dev
-```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser!
+| **Orchestration** | Kubernetes manifests with HorizontalPodAutoscaler (HPA) |
 
 ---
 
 ## 🐳 Docker Compose Deployment
 
-Run the complete multi-container production stack (PostgreSQL, Redis, MinIO, Backend, Frontend, Prometheus, Grafana):
+Run the complete multi-container production stack with PostgreSQL, Redis, MinIO, Backend, Frontend, Prometheus, and Grafana:
 
 ```bash
 docker compose up --build
@@ -152,4 +190,4 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## 📄 License
 
-MIT License. Built for modern cloud-native systems exploration and load testing.
+MIT License. Built for modern cloud-native systems exploration, load testing, and system design interviews.
