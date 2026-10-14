@@ -10,24 +10,91 @@
 
 A modern, production-grade distributed systems visualization, real-time request tracing, and concurrent load testing developer platform.
 
-The platform visually demonstrates how a modern cloud-native system processes API requests, handles concurrent traffic, distributes load across pod replicas, evaluates caching tiers, queries relational databases, retrieves unstructured S3 objects, and automatically scales stateless compute using the Kubernetes Horizontal Pod Autoscaler (HPA).
+---
+
+## 📖 Application Overview
+
+Most system design diagrams are static boxes on a whiteboard. But distributed systems aren't static — they are living topologies governed by backpressure, consumer lag, circuit breakers tripping, partition routing, and cache stampedes.
+
+**Request Flow Visualizer** is an interactive, full-stack distributed systems lab that brings cloud-native architectures to life. It visually demonstrates how a modern system processes incoming HTTP/REST requests, applies API Gateway rate limiting, distributes load across pod replicas, evaluates caching tiers, queries relational databases, stores unstructured S3 objects, streams events through Apache Kafka, and automatically scales stateless compute using the Kubernetes Horizontal Pod Autoscaler (HPA).
+
+### Key Architectural Capabilities:
+- **Dynamic Multi-Pod Load Balancing**: Scale L4/L7 load balancers (1 to 4 pods) with Round Robin, Least Connections, and IP Hash algorithms — observe how traffic distribution shifts across backend services in real time.
+- **Multi-Node Redis Cluster & Sharding**: Spin up multiple Redis cache nodes on the fly with configurable eviction policies (LRU/LFU) and TTL invalidation.
+- **Configurable API Gateway Rate Limiting**: Switch between Token Bucket (with burst allowance), Leaky Bucket, Sliding Window, and Fixed Window algorithms with client identification by IP, API Key, or JWT.
+- **Kafka Event Streaming & Distributed Order Sagas**: Watch asynchronous order checkout sagas execute across `Gateway → LB → Backend → Kafka Topic Partitions → Event Consumer Workers → PostgreSQL Database`.
+- **Resilience & Chaos Engineering**: Trip circuit breakers to fail-fast, exhaust token buckets, simulate poison-pill messages routing to Dead Letter Queues (DLQ), and monitor HPA autoscaling.
+- **Zero-Dependency In-Memory Emulation**: Automatically detects if live Docker services (PostgreSQL, Redis, MinIO) are running; if offline, transparently falls back to local in-memory engines so the app runs 100% out-of-the-box!
+
+---
 
 ## 📸 Platform Screenshots
 
-### 1. Interactive Architecture Flow Canvas (Light Mode)
-*Interactive React Flow topology canvas with live icon-first infrastructure nodes, dynamic particle packet streams, and collapsible observability drawer.*
-
-![Interactive Architecture Flow Canvas (Light Mode)](docs/screenshots/topology-canvas-light.jpg)
-
-### 2. Live Concurrent Load Testing & Metrics (Dark Mode)
+### 1. Live Concurrent Load Testing & Metrics (Dark Mode)
 *Real-time distributed request flow under concurrent multi-user load testing, featuring per-pod CPU telemetry, dynamic traffic routing, and p50/p95/p99 latency percentiles.*
 
-![Real-time Load Testing and Metrics (Dark Mode)](docs/screenshots/traffic-dashboard-dark.jpg)
+![Real-time Load Testing and Metrics (Dark Mode)](docs/screenshots/traffic-dashboard-dark.png)
+
+### 2. Interactive Multi-Pod Architecture Canvas (Light Mode)
+*Interactive React Flow topology canvas showing 3 scaled Load Balancer pods with dynamic traffic distribution, Redis cluster nodes, and live telemetry.*
+
+![Interactive Architecture Flow Canvas (Light Mode)](docs/screenshots/topology-canvas-light.png)
 
 ### 3. Component Testing Lab & API Testing Console
-*Dedicated isolation testing suites for Redis Cache, PostgreSQL, MinIO S3, and Load Balancers alongside an interactive HTTP request console and trace inspection console.*
+*Dedicated isolation testing suites for Redis Cache, PostgreSQL, MinIO S3, Kafka Message Queues, and Load Balancers alongside an interactive HTTP request console and trace inspection console.*
 
 ![Component Testing Lab & API Console](docs/screenshots/component-testing-console.jpg)
+
+---
+
+## ⚡ One-Click Quick Start
+
+Get the entire application up and running with a single click or command!
+
+### 🖱️ Double-Click to Launch (Zero Terminal Required)
+- **macOS**: Double-click **`mac-launch.command`** in Finder.
+- **Linux**: Run or double-click **`linux-launch.sh`**.
+- **Windows**: Double-click **`windows-launch.bat`** in File Explorer.
+
+> These launchers automatically verify dependencies, compile builds if needed, start backend & frontend servers, and automatically open **http://localhost:3000** in your default web browser!
+
+---
+
+### 💻 Terminal Quick Start
+
+#### macOS / Linux
+```bash
+git clone https://github.com/your-username/Request-Flow-Visualizer.git
+cd Request-Flow-Visualizer
+
+# Run one-click setup script
+chmod +x setup.sh && ./setup.sh
+
+# Start backend & frontend concurrently
+npm run dev
+```
+
+#### Windows
+```cmd
+git clone https://github.com/your-username/Request-Flow-Visualizer.git
+cd Request-Flow-Visualizer
+
+# Run one-click setup batch script
+setup.bat
+
+# Start backend & frontend concurrently
+npm run dev
+```
+
+#### Alternatively via npm
+```bash
+npm run setup
+npm run dev
+```
+
+Open **[http://localhost:3000](http://localhost:3000)** in your browser!
+
+> 💡 **Zero-Dependency In-Memory Mode**: If live Docker services (PostgreSQL, Redis, MinIO) are not running on your machine, the backend transparently falls back to high-fidelity in-memory emulation. It works 100% out-of-the-box!
 
 ---
 
@@ -84,46 +151,6 @@ The platform visually demonstrates how a modern cloud-native system processes AP
 | **Observability** | Prometheus (`prom-client`), Grafana dashboards |
 | **Containerization** | Docker, Docker Compose (multi-stage builds) |
 | **Orchestration** | Kubernetes manifests with HorizontalPodAutoscaler (HPA) |
-
----
-
-## ⚡ One-Click Quick Start
-
-Get the entire application up and running with a single command!
-
-### macOS / Linux
-```bash
-git clone https://github.com/your-username/Request-Flow-Visualizer.git
-cd Request-Flow-Visualizer
-
-# Run the automated setup script
-chmod +x setup.sh && ./setup.sh
-
-# Start backend & frontend concurrently
-npm run dev
-```
-
-### Windows
-```cmd
-git clone https://github.com/your-username/Request-Flow-Visualizer.git
-cd Request-Flow-Visualizer
-
-# Run the automated setup batch script
-setup.bat
-
-# Start backend & frontend concurrently
-npm run dev
-```
-
-### Alternatively via npm
-```bash
-npm run setup
-npm run dev
-```
-
-Open **[http://localhost:3000](http://localhost:3000)** in your browser!
-
-> 💡 **Zero-Dependency In-Memory Mode**: If live Docker services (PostgreSQL, Redis, MinIO) are not running on your machine, the backend transparently falls back to high-fidelity in-memory emulation. It works 100% out-of-the-box!
 
 ---
 
